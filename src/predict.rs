@@ -46,21 +46,6 @@ pub fn pred_dc_top_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &
     }
 }
 
-
-pub fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-    let edges = left.iter().chain(above.iter());
-    let bw = above.len();
-    let bh = left.len();
-    let len = (bw + bh) as u32;
-    let avg = (edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len;
-
-    for line in output.chunks_mut(stride).take(bh) {
-        for v in &mut line[..bw] {
-            *v = avg as u16;
-        }
-    }
-}
-
 pub trait Dim {
     const W : usize;
     const H : usize;
@@ -73,34 +58,35 @@ impl Dim for Block4x4 {
     const H : usize = 4;
 }
 
-pub fn pred_dc_trait<D: Dim>(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-    let edges = left.iter().chain(above.iter());
-    let bw = D::W;
-    let bh = D::H;
-    let len = (bw + bh) as u32;
-    let avg = (edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len;
+pub trait Intra: Dim {
+    fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+        let edges = left[..Self::H].iter().chain(above[..Self::W].iter());
+        let len = (Self::W + Self::H) as u32;
+        let avg = ((edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len) as u16;
 
-    for line in output.chunks_mut(stride).take(bh) {
-        for v in &mut line[..bw] {
-            *v = avg as u16;
+        for line in output.chunks_mut(stride).take(Self::H) {
+            for v in &mut line[..Self::W] {
+                *v = avg;
+            }
+        }
+    }
+
+    fn pred_h(output: &mut [u16], stride: usize, left: &[u16]) {
+        for (line, l) in output.chunks_mut(stride).zip(left[..Self::H].iter()) {
+            for v in &mut line[..Self::W] {
+                *v = *l;
+            }
+        }
+    }
+
+    fn pred_v(output: &mut [u16], stride: usize, above: &[u16]) {
+        for line in output.chunks_mut(stride).take(Self::H) {
+            line[..Self::W].clone_from_slice(&above[..Self::W])
         }
     }
 }
 
-pub fn pred_h(output: &mut [u16], stride: usize, left: &[u16], bw: usize) {
-  for (line, l) in output.chunks_mut(stride).zip(left) {
-    for v in &mut line[..bw] {
-      *v = *l;
-    }
-  }
-}
-
-pub fn pred_v(output: &mut [u16], stride: usize, above: &[u16], bh: usize) {
-    let bw = above.len();
-    for line in output.chunks_mut(stride).take(bh) {
-        line[..bw].clone_from_slice(above)
-    }
-}
+impl Intra for Block4x4 {}
 
 #[cfg(test)]
 pub mod test {
@@ -142,7 +128,7 @@ pub mod test {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_dc_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        pred_dc_trait::<Block4x4>(&mut o2, 32, &above[..4], &left[..4]);
+        Block4x4::pred_dc(&mut o2, 32, &above[..4], &left[..4]);
 
         (o1, o2)
     }
@@ -151,7 +137,7 @@ pub mod test {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_h_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        pred_h(&mut o2, 32, &left[..4], 4);
+        Block4x4::pred_h(&mut o2, 32, &left[..4]);
 
         (o1, o2)
     }
@@ -160,7 +146,7 @@ pub mod test {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_v_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        pred_v(&mut o2, 32, &above[..4], 4);
+        Block4x4::pred_v(&mut o2, 32, &above[..4]);
 
         (o1, o2)
     }
@@ -206,7 +192,7 @@ pub mod test {
 
         let mut o = vec![0u16; 32 * 32];
 
-        pred_dc(&mut o, 32, &above[..4], &left[..4]);
+        Block4x4::pred_dc(&mut o, 32, &above[..4], &left[..4]);
 
         for l in o.chunks(32).take(4) {
             for v in l[..4].iter() {
@@ -214,7 +200,7 @@ pub mod test {
             }
         }
 
-        pred_h(&mut o, 32, &left[..4], 4);
+        Block4x4::pred_h(&mut o, 32, &left[..4]);
 
         for l in o.chunks(32).take(4) {
           for v in l[..4].iter() {
@@ -222,7 +208,7 @@ pub mod test {
           }
         }
 
-        pred_v(&mut o, 32, &above[..4], 4);
+        Block4x4::pred_v(&mut o, 32, &above[..4]);
 
         for l in o.chunks(32).take(4) {
           for v in l[..4].iter() {
