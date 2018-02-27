@@ -346,7 +346,7 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState,
 // Find the best mode of an predictoin block, i.e. a partitioned block
 fn find_best_mode(fi: &FrameInvariants, fs: &mut FrameState,
                   cw: &mut ContextWriter, sbo: &SuperBlockOffset,
-                  bsize: BlockSize, bo: &BlockOffset, rd: &RDOOutput) -> i64 {
+                  bsize: BlockSize, bo: &BlockOffset) -> RDOOutput {
     let q = dc_q(fi.qindex) as f64;
     // Lambda formula from doc/theoretical_results.lyx in the daala repo
     let lambda = q*q*2.0_f64.log2()/6.0;
@@ -372,7 +372,11 @@ fn find_best_mode(fi: &FrameInvariants, fs: &mut FrameState,
         cw.rollback(checkpoint.clone());
     }
 
-    best_rd as i64
+    assert!(best_rd as i64 >= 0);
+
+    let rdo_output = RDOOutput { rd_cost: best_rd as u64,
+                                pred_mode: best_mode};
+    rdo_output
 }
 
 // Decide partition, recursively.
@@ -380,32 +384,32 @@ fn partition(fi: &FrameInvariants, fs: &mut FrameState,
                   cw: &mut ContextWriter, sbo: &SuperBlockOffset,
                   bsize: BlockSize, bo: &BlockOffset){
 
-    // Handles different types of a partition.
-    let best_modes_per_partition = [PredictionMode::DC_PRED as PredictionMode; PARTITION_TYPES];
+    // Partition a block with different partitoin types
     let mut best_partition = PartitionType::PARTITION_NONE;
     let mut best_rd_cost = std::f64::MAX;
     let mut rd_cost = std::f64::MAX;
-    let mut rdo = RDOOutput { rate: std::u64::MAX,
-                                dist: std::u64::MAX,
-                                rd_cost: std::u64::MAX,
-                                pred_mode: PredictionMode::DC_PRED};
+    let mut rdo = RDOOutput { rd_cost: std::u64::MAX,
+                              pred_mode: PredictionMode::DC_PRED};
 
     // PARITION_NONE
-    let best_rd_cost = find_best_mode(fi, fs, cw, &sbo, bsize, bo, &rdo);
-    assert!(best_rd_cost >= 0);
-
-    //cw.bc.at(&bo).mode = best_mode;
-    // reconstruct with best mode
-    write_sb(cw, fi, fs, &sbo, rdo.pred_mode, bsize, bo);
+    let rdo = find_best_mode(fi, fs, cw, &sbo, bsize, bo);
+    let mut best_rdo =  rdo.clone();
 
 
     // PARTITION_SPLIT
     // If partition type is PARTITION_SPLIT, recursively call write_sb here.
     let rd_cost = 0;
 
+    let rdo = find_best_mode(fi, fs, cw, &sbo, bsize, bo);
+
+
     // ...
 
+    // rd_cost = ++ + .. + .. + .. ;
+
+
     // if rd_cost < best_rd_cost {
+    //	   let best_rdo =  rdo.clone();
     // 	   best_rd_cost = rd_cost;
     //	   best_partition = PARTITION_SPLIT;
     // }
@@ -413,7 +417,8 @@ fn partition(fi: &FrameInvariants, fs: &mut FrameState,
 
 
 
-
+    // reconstruct with best mode
+    write_sb(cw, fi, fs, &sbo, rdo.pred_mode, bsize, bo);
 }
 
 fn encode_superblock(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState,

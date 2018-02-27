@@ -16,8 +16,6 @@ use partition::PredictionMode;
 
 #[derive(Copy,Clone)]
 pub struct RDOOutput {
-    pub rate: u64,
-    pub dist: u64,
     pub rd_cost: u64,
     pub pred_mode: PredictionMode,
 }
