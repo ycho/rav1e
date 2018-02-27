@@ -346,7 +346,7 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState,
 // Find the best mode of an predictoin block, i.e. a partitioned block
 fn find_best_mode(fi: &FrameInvariants, fs: &mut FrameState,
                   cw: &mut ContextWriter, sbo: &SuperBlockOffset,
-                  bsize: BlockSize, bo: &BlockOffset) -> i64 {
+                  bsize: BlockSize, bo: &BlockOffset, rd: &RDOOutput) -> i64 {
     let q = dc_q(fi.qindex) as f64;
     // Lambda formula from doc/theoretical_results.lyx in the daala repo
     let lambda = q*q*2.0_f64.log2()/6.0;
@@ -385,15 +385,18 @@ fn partition(fi: &FrameInvariants, fs: &mut FrameState,
     let mut best_partition = PartitionType::PARTITION_NONE;
     let mut best_rd_cost = std::f64::MAX;
     let mut rd_cost = std::f64::MAX;
-    let mut rdo = RDOOuput(0 as u64, 0 as u64, 0 as u64);
+    let mut rdo = RDOOutput { rate: std::u64::MAX,
+                                dist: std::u64::MAX,
+                                rd_cost: std::u64::MAX,
+                                pred_mode: PredictionMode::DC_PRED};
 
     // PARITION_NONE
-    let best_rd_cost = find_best_mode(fi, fs, cw, &sbo, bsize, bo);
+    let best_rd_cost = find_best_mode(fi, fs, cw, &sbo, bsize, bo, &rdo);
     assert!(best_rd_cost >= 0);
 
     //cw.bc.at(&bo).mode = best_mode;
     // reconstruct with best mode
-    write_sb(cw, fi, fs, &sbo, rdo, bsize, bo);
+    write_sb(cw, fi, fs, &sbo, rdo.pred_mode, bsize, bo);
 
 
     // PARTITION_SPLIT
@@ -439,6 +442,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             let sbo = SuperBlockOffset { x: sbx, y: sby };
             let bo = sbo.block_offset(0, 0);
 
+            // partition with RDO-based mode decision
             partition(fi, fs, &mut cw, &sbo, BlockSize::BLOCK_64X64, &bo);
 
             // Encode with decided modes, recursively

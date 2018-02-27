@@ -11,13 +11,27 @@
 #![allow(non_camel_case_types)]
 
 use plane::*;
+use partition::PredictionMode;
+//use std::io::prelude::*;
 
+#[derive(Copy,Clone)]
 pub struct RDOOutput {
     pub rate: u64,
     pub dist: u64,
-    pub rd_cost: u64
+    pub rd_cost: u64,
+    pub pred_mode: PredictionMode,
 }
-
+/*
+impl RDOOutput {
+    pub fn new() -> RDOOutput {
+        RDOOutput {
+            rate: std::u64::MAX,
+            dist: std::u64::MAX,
+            rd_cost:std::u64::MAX
+        }
+    }
+}
+*/
 // Sum of Squared Error for a 64x64 block
 pub fn sse_64x64(src1: &PlaneSlice, src2: &PlaneSlice) -> u64 {
     let mut sse: u64 = 0;
