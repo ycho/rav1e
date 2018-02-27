@@ -12,6 +12,12 @@
 
 use plane::*;
 
+pub struct RDOOutput {
+    pub rate: u64,
+    pub dist: u64,
+    pub rd_cost: u64
+}
+
 // Sum of Squared Error for a 64x64 block
 pub fn sse_64x64(src1: &PlaneSlice, src2: &PlaneSlice) -> u64 {
     let mut sse: u64 = 0;

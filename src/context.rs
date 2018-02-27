@@ -13,7 +13,7 @@ const PLANES: usize = 3;
 
 const PARTITION_PLOFFSET: usize = 4;
 const PARTITION_CONTEXTS: usize = 16;
-const PARTITION_TYPES: usize = 4;
+pub const PARTITION_TYPES: usize = 4;
 
 const MI_SIZE_LOG2: usize = 2;
 const MI_SIZE: usize = (1 << MI_SIZE_LOG2);
@@ -397,7 +397,8 @@ impl Block {
         }
     }
     pub fn is_inter(&self) -> bool {
-        false
+        if self.mode >= PredictionMode::NEARESTMV { true }
+        else { false }
     }
 }
 

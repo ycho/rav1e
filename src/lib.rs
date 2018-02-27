@@ -274,13 +274,19 @@ fn diff_4x4(dst: &mut [i16; 16], src1: &PlaneSlice, src2: &PlaneSlice) {
     }
 }
 
-pub fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, bo: &BlockOffset, mode: PredictionMode, tx_type: TxType) {
+// For a trasnform block,
+// predict, transform, quantize, write coefficients to a bitstream,
+// dequantize, inverse-transform.
+pub fn write_tx_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, bo: &BlockOffset, mode: PredictionMode, tx_type: TxType) {
+    cw.bc.at(&bo).mode = mode;
+
     let stride = fs.input.planes[p].cfg.stride;
     let rec = &mut fs.rec.planes[p];
     let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
-    mode.predict_4x4(&mut rec.mut_slice(&po));
-
+    if !cw.bc.at(&bo).is_inter() {
+        mode.predict_4x4(&mut rec.mut_slice(&po));
+    }
     let mut residual = [0 as i16; 16];
     diff_4x4(&mut residual,
              &fs.input.planes[p].slice(&po),
@@ -299,28 +305,25 @@ pub fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState
 }
 
 fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState,
-            sbo: &SuperBlockOffset, mode: PredictionMode, bsize: BlockSize) {
+            sbo: &SuperBlockOffset, mode: PredictionMode, bsize: BlockSize,
+            bo: &BlockOffset) {
+
     cw.write_partition(PartitionType::PARTITION_NONE, bsize);
 
-    // TODO(yushin): If partition type is PARTITION_SPLIT, recursively call write_sb here.
-    // Otherwise, call write_b for each parition
-
-    // TODO(yushin): Factor out new function which handles four different types of a partition.
-
-    // The partition offset is represented using a BlockOffset
-    let po = sbo.block_offset(0, 0);
-    cw.write_skip(&po, false);
-    cw.write_intra_mode_kf(&po, mode);
+    cw.write_skip(&bo, false);
+    cw.write_intra_mode_kf(&bo, mode);
+    // FIXME(you): inter mode block does not use uv_mode
     let uv_mode = mode;
     cw.write_intra_uv_mode(uv_mode, mode);
     let tx_type = TxType::DCT_DCT;
     cw.write_tx_type(tx_type, mode);
+
+    // TODO(you):Below for-loop(s) should be put in a prediction block
     for p in 0..1 {
         for by in 0..16 {
             for bx in 0..16 {
                 let bo = sbo.block_offset(bx, by);
-                cw.bc.at(&bo).mode = mode;
-                write_b(cw, fi, fs, p, &bo, mode, tx_type);
+                write_tx_b(cw, fi, fs, p, &bo, mode, tx_type);
             }
         }
     }
@@ -329,7 +332,7 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState,
         for by in 0..8 {
             for bx in 0..8 {
                 let bo = sbo.block_offset(bx, by);
-                write_b(cw, fi, fs, p, &bo, uv_mode, uv_tx_type);
+                write_tx_b(cw, fi, fs, p, &bo, uv_mode, uv_tx_type);
             }
         }
     }
@@ -337,7 +340,85 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState,
     // Update partition context
     let subsize = get_subsize(bsize, PartitionType::PARTITION_NONE);
 
-    cw.bc.update_partition_context(&po, subsize, bsize);
+    cw.bc.update_partition_context(&bo, subsize, bsize);
+}
+
+// Find the best mode of an predictoin block, i.e. a partitioned block
+fn find_best_mode(fi: &FrameInvariants, fs: &mut FrameState,
+                  cw: &mut ContextWriter, sbo: &SuperBlockOffset,
+                  bsize: BlockSize, bo: &BlockOffset) -> i64 {
+    let q = dc_q(fi.qindex) as f64;
+    // Lambda formula from doc/theoretical_results.lyx in the daala repo
+    let lambda = q*q*2.0_f64.log2()/6.0;
+
+    let mut best_mode = PredictionMode::DC_PRED;
+    let mut best_rd = std::f64::MAX;
+    let tell = cw.w.tell_frac();
+
+    for &mode in RAV1E_INTRA_MODES {
+        let checkpoint = cw.checkpoint();
+
+        write_sb(cw, fi, fs, sbo, mode, bsize, bo);
+        let po = sbo.plane_offset(&fs.input.planes[0].cfg);
+        let d = sse_64x64(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po));
+        let r = ((cw.w.tell_frac() - tell) as f64)/8.0;
+
+        let rd = (d as f64) + lambda*r;
+        if rd < best_rd {
+            best_rd = rd;
+            best_mode = mode;
+        }
+
+        cw.rollback(checkpoint.clone());
+    }
+
+    best_rd as i64
+}
+
+// Decide partition, recursively.
+fn partition(fi: &FrameInvariants, fs: &mut FrameState,
+                  cw: &mut ContextWriter, sbo: &SuperBlockOffset,
+                  bsize: BlockSize, bo: &BlockOffset){
+
+    // Handles different types of a partition.
+    let best_modes_per_partition = [PredictionMode::DC_PRED as PredictionMode; PARTITION_TYPES];
+    let mut best_partition = PartitionType::PARTITION_NONE;
+    let mut best_rd_cost = std::f64::MAX;
+    let mut rd_cost = std::f64::MAX;
+    let mut rdo = RDOOuput(0 as u64, 0 as u64, 0 as u64);
+
+    // PARITION_NONE
+    let best_rd_cost = find_best_mode(fi, fs, cw, &sbo, bsize, bo);
+    assert!(best_rd_cost >= 0);
+
+    //cw.bc.at(&bo).mode = best_mode;
+    // reconstruct with best mode
+    write_sb(cw, fi, fs, &sbo, rdo, bsize, bo);
+
+
+    // PARTITION_SPLIT
+    // If partition type is PARTITION_SPLIT, recursively call write_sb here.
+    let rd_cost = 0;
+
+    // ...
+
+    // if rd_cost < best_rd_cost {
+    // 	   best_rd_cost = rd_cost;
+    //	   best_partition = PARTITION_SPLIT;
+    // }
+
+
+
+
+
+}
+
+fn encode_superblock(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState,
+            sbo: &SuperBlockOffset, bsize: BlockSize,
+            bo: &BlockOffset) {
+
+    // let best_mode = cw.bc.at(&sbo.block_offset(0, 0)).mode;
+
 }
 
 fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
@@ -350,40 +431,18 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
         bc: bc,
     };
 
-    let q = dc_q(fi.qindex) as f64;
-
-    // Lambda formula from doc/theoretical_results.lyx in the daala repo
-    let lambda = q*q*2.0_f64.log2()/6.0;
-
     for sby in 0..fi.sb_height {
         for p in 0..3 {
             cw.bc.reset_left_coeff_context(p);
         }
         for sbx in 0..fi.sb_width {
             let sbo = SuperBlockOffset { x: sbx, y: sby };
-            let po = sbo.plane_offset(&fs.input.planes[0].cfg);
-            let tell = cw.w.tell_frac();
+            let bo = sbo.block_offset(0, 0);
 
-            let mut best_mode = PredictionMode::DC_PRED;
-            let mut best_rd = std::f64::MAX;
+            partition(fi, fs, &mut cw, &sbo, BlockSize::BLOCK_64X64, &bo);
 
-            for &mode in RAV1E_INTRA_MODES {
-                let checkpoint = cw.checkpoint();
-
-                write_sb(&mut cw, fi, fs, &sbo, mode, BlockSize::BLOCK_64X64);
-                let d = sse_64x64(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po));
-                let r = ((cw.w.tell_frac() - tell) as f64)/8.0;
-
-                let rd = (d as f64) + lambda*r;
-                if rd < best_rd {
-                    best_rd = rd;
-                    best_mode = mode;
-                }
-
-                cw.rollback(checkpoint.clone());
-            }
-
-            write_sb(&mut cw, fi, fs, &sbo, best_mode, BlockSize::BLOCK_64X64);
+            // Encode with decided modes, recursively
+            encode_superblock(&mut cw, fi, fs, &sbo, BlockSize::BLOCK_64X64, &bo);
         }
     }
     let mut h = cw.w.done();
