@@ -384,7 +384,7 @@ fn search_best_mode(fi: &FrameInvariants, fs: &mut FrameState,
 
 // Decide partition, recursively.
 fn search_partition(fi: &FrameInvariants, fs: &mut FrameState,
-                  cw: &mut ContextWriter, sbo: &SuperBlockOffset,
+                  cw: &mut ContextWriter,
                   bsize: BlockSize, bo: &BlockOffset) -> u64{
 
     // Partition a block with different partitoin types
@@ -402,18 +402,20 @@ fn search_partition(fi: &FrameInvariants, fs: &mut FrameState,
     //let mut best_rdo = rdo.clone();
     let mut best_rd_cost = rdo.rd_cost;
 
+    //let min_splitable_bsize = BlockSize::BLOCK_8X8;
+    let min_splitable_bsize = BlockSize::BLOCK_64X64;	//for debugging
 
-    if bsize >= BlockSize::BLOCK_8X8 {
+    if bsize >= min_splitable_bsize {
         let checkpoint = cw.checkpoint();
 
         // PARTITION_SPLIT
         // Recursively split into four quarters.
-        let rd_cost0 = search_partition(fi, fs, cw, &sbo, bsize, bo);
-        let rd_cost1 = search_partition(fi, fs, cw, &sbo, bsize, 
+        let rd_cost0 = search_partition(fi, fs, cw, bsize, bo);
+        let rd_cost1 = search_partition(fi, fs, cw, bsize,
                                  &BlockOffset{x: bo.x + hbs as usize, y: bo.y});
-        let rd_cost2 = search_partition(fi, fs, cw, &sbo, bsize, 
+        let rd_cost2 = search_partition(fi, fs, cw, bsize,
                                  &BlockOffset{x: bo.x, y: bo.y + hbs as usize});
-        let rd_cost3 = search_partition(fi, fs, cw, &sbo, bsize,
+        let rd_cost3 = search_partition(fi, fs, cw, bsize,
                                  &BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize});
 
         cw.rollback(checkpoint.clone());
@@ -463,7 +465,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             let bo = sbo.block_offset(0, 0);
 
             // partition with RDO-based mode decision
-            search_partition(fi, fs, &mut cw, &sbo, BlockSize::BLOCK_64X64, &bo);
+            search_partition(fi, fs, &mut cw, BlockSize::BLOCK_64X64, &bo);
 
             // Encode SuperBlock bitstream with decided modes, recursively
             write_superblock(&mut cw, fi, fs, &sbo, BlockSize::BLOCK_64X64, &bo);
