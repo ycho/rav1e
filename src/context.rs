@@ -28,14 +28,14 @@ const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 const INTRA_MODES: usize = 13;
 const UV_INTRA_MODES: usize = 13;
 
-static mi_size_wide: [u8; BLOCK_SIZES_ALL] = [
+pub static mi_size_wide: [u8; BLOCK_SIZES_ALL] = [
   1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 1, 4, 2, 8, 4, 16];
-static mi_size_high: [u8; BLOCK_SIZES_ALL] = [
+pub static mi_size_high: [u8; BLOCK_SIZES_ALL] = [
   1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 4, 1, 8, 2, 16, 4];
-static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
-static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
-static tx_size_wide_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
-static tx_size_high_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
+pub static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
+pub static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
+pub static tx_size_wide_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
+pub static tx_size_high_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 6;
@@ -378,6 +378,10 @@ impl BlockOffset {
         }
     }
 
+    pub fn x_in_sb(&self) -> usize {
+        self.x % MAX_MIB_SIZE
+    }
+
     pub fn y_in_sb(&self) -> usize {
         self.y % MAX_MIB_SIZE
     }
@@ -386,6 +390,8 @@ impl BlockOffset {
 #[derive(Copy,Clone)]
 pub struct Block {
     pub mode: PredictionMode,
+    pub bsize: BlockSize,
+    pub partition: PartitionType,
     pub skip: bool,
 }
 
@@ -393,6 +399,8 @@ impl Block {
     pub fn default() -> Block {
         Block {
             mode: PredictionMode::DC_PRED,
+            bsize: BlockSize::BLOCK_64X64,
+            partition: PartitionType::PARTITION_NONE,
             skip: false,
         }
     }
@@ -466,6 +474,22 @@ impl BlockContext {
         for c in self.left_coeff_context[plane].iter_mut() {
             *c = 0;
         }
+    }
+
+    pub fn set_mode(&mut self, bo: &BlockOffset, mode: PredictionMode) {
+        self.blocks[bo.y][bo.x].mode = mode;
+    }
+
+    pub fn get_mode(&mut self, bo: &BlockOffset) -> PredictionMode {
+        self.blocks[bo.y][bo.x].mode
+    }
+
+    pub fn set_partition(&mut self, bo: &BlockOffset, partition: PartitionType) {
+        self.blocks[bo.y][bo.x].partition = partition;
+    }
+
+    pub fn get_partition(&mut self, bo: &BlockOffset) -> PartitionType {
+        self.blocks[bo.y][bo.x].partition
     }
 
     fn partition_plane_context(&self, bo: &BlockOffset,
