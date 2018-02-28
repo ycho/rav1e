@@ -402,10 +402,12 @@ fn search_partition(fi: &FrameInvariants, fs: &mut FrameState,
     //let mut best_rdo = rdo.clone();
     let mut best_rd_cost = rdo.rd_cost;
 
+    let square_blk = mi_size_wide[bsize as usize] == mi_size_high[bsize as usize];
+
     //let min_splitable_bsize = BlockSize::BLOCK_8X8;
     let min_splitable_bsize = BlockSize::BLOCK_64X64;	//for debugging
 
-    if bsize >= min_splitable_bsize {
+    if square_blk && bsize >= min_splitable_bsize {
         let checkpoint = cw.checkpoint();
 
         // PARTITION_SPLIT
