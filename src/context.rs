@@ -12,7 +12,7 @@ use plane::*;
 const PLANES: usize = 3;
 
 const PARTITION_PLOFFSET: usize = 4;
-const PARTITION_CONTEXTS: usize = 16;
+const PARTITION_CONTEXTS: usize = 20;
 pub const PARTITION_TYPES: usize = 4;
 
 const MI_SIZE_LOG2: usize = 2;
@@ -548,9 +548,9 @@ pub struct ContextWriter {
 }
 
 impl ContextWriter {
-    pub fn write_partition(&mut self, p: PartitionType, bsize: BlockSize) {
-        let bo = BlockOffset { x: 0, y: 0 };
+    pub fn write_partition(&mut self, bo: &BlockOffset, p: PartitionType, bsize: BlockSize) {
         let ctx = self.bc.partition_plane_context(&bo, bsize);
+        assert!(ctx < PARTITION_CONTEXTS);
         self.w.symbol(p as u32, &mut self.fc.partition_cdf[ctx], PARTITION_TYPES);
     }
     pub fn write_intra_mode_kf(&mut self, bo: &BlockOffset, mode: PredictionMode) {

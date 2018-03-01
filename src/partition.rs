@@ -1,13 +1,13 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-#[derive(Copy,Clone,PartialEq)]
+#[derive(Copy,Clone,PartialEq,PartialOrd)]
 pub enum PartitionType {
     PARTITION_NONE,
     PARTITION_HORZ,
     PARTITION_VERT,
     PARTITION_SPLIT,
-    PARTITION_INVALID = 255
+    PARTITION_INVALID
 }
 
 pub const BLOCK_SIZES_ALL: usize = 19;
@@ -33,7 +33,7 @@ pub enum BlockSize {
     BLOCK_32X8,
     BLOCK_16X64,
     BLOCK_64X16,
-    BLOCK_INVALID = 255
+    BLOCK_INVALID
 }
 
 pub const TX_SIZES: usize = 4;
