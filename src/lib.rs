@@ -460,6 +460,10 @@ fn search_partition(fi: &FrameInvariants, fs: &mut FrameState,
 
 fn write_sb(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
             bsize: BlockSize, bo: &BlockOffset) {
+
+    assert!(bsize >= BlockSize::BLOCK_8X8);
+    assert!(mi_size_wide[bsize as usize] == mi_size_high[bsize as usize]);
+
     let partition = cw.bc.get_partition(bo);
     assert!(PartitionType::PARTITION_NONE <= partition &&
             partition < PartitionType::PARTITION_INVALID);

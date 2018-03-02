@@ -504,7 +504,7 @@ impl BlockContext {
         let above_ctx = self.above_partition_context[bo.x];
         let left_ctx = self.left_partition_context[bo.y_in_sb()];
         //for debugging
-        if (b_width_log2_lookup[bsize as usize] < b_width_log2_lookup[BlockSize::BLOCK_8X8 as usize]) {
+        if b_width_log2_lookup[bsize as usize] < b_width_log2_lookup[BlockSize::BLOCK_8X8 as usize] {
             let error = 1;
         }
         let bsl = b_width_log2_lookup[bsize as usize] - b_width_log2_lookup[BlockSize::BLOCK_8X8 as usize];
