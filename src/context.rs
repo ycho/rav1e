@@ -36,6 +36,12 @@ pub static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 0, 1, 1, 1, 2, 2, 2,
 pub static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
 pub static tx_size_wide_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
 pub static tx_size_high_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
+// Width/height lookup tables in units of various block sizes
+pub static block_size_wide: [u8; BLOCK_SIZES_ALL] = [
+    4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 32, 64, 64, 4, 16, 8, 32, 16, 64 ];
+
+pub static block_size_high: [u8; BLOCK_SIZES_ALL] = [
+    4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 64, 32, 64, 16,4, 32, 8, 64, 16 ];
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 6;
@@ -497,6 +503,10 @@ impl BlockContext {
         // TODO: this should be way simpler without sub8x8
         let above_ctx = self.above_partition_context[bo.x];
         let left_ctx = self.left_partition_context[bo.y_in_sb()];
+        //for debugging
+        if (b_width_log2_lookup[bsize as usize] < b_width_log2_lookup[BlockSize::BLOCK_8X8 as usize]) {
+            let error = 1;
+        }
         let bsl = b_width_log2_lookup[bsize as usize] - b_width_log2_lookup[BlockSize::BLOCK_8X8 as usize];
         let above = (above_ctx >> bsl) & 1;
         let left = (left_ctx >> bsl) & 1;

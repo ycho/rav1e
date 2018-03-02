@@ -279,8 +279,6 @@ fn diff_4x4(dst: &mut [i16; 16], src1: &PlaneSlice, src2: &PlaneSlice) {
 // dequantize, inverse-transform.
 pub fn write_tx_b(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
                   p: usize, bo: &BlockOffset, mode: PredictionMode, tx_type: TxType) {
-    cw.bc.at(&bo).mode = mode;
-
     let stride = fs.input.planes[p].cfg.stride;
     let rec = &mut fs.rec.planes[p];
     let po = bo.plane_offset(&fs.input.planes[p].cfg);
@@ -289,6 +287,17 @@ pub fn write_tx_b(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWri
         mode.predict_4x4(&mut rec.mut_slice(&po));
     }
     let mut residual = [0 as i16; 16];
+
+    // for debugging
+    let ydec = fs.input.planes[p].cfg.ydec;
+    if po.y * stride + po.x >= fi.sb_height * (64 >> ydec) * stride {
+        let will_crash = 1;
+    }
+
+    if (po.y + 3) * stride + po.x + 3 >= fi.sb_height * (64 >> ydec) * stride {
+        let will_crash = 1;
+    }
+
     diff_4x4(&mut residual,
              &fs.input.planes[p].slice(&po),
              &rec.slice(&po));
@@ -307,6 +316,7 @@ pub fn write_tx_b(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWri
 
 fn write_b(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
             mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset) {
+    cw.bc.at(&bo).mode = mode;
     cw.write_skip(&bo, false);
     cw.write_intra_mode_kf(&bo, mode);
     // FIXME(you): inter mode block does not use uv_mode
@@ -329,10 +339,12 @@ fn write_b(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
         }
     }
     let uv_tx_type = exported_intra_mode_to_tx_type_context[uv_mode as usize];
+    let uv_bo = BlockOffset{ x: bo.x >> fs.input.planes[1].cfg.xdec,
+                            y: bo.x >> fs.input.planes[1].cfg.ydec };
     for p in 1..3 {
         for by in 0..bh >> 1 {
             for bx in 0..bw >> 1 {
-                let tx_bo = BlockOffset{x: bo.x + bx as usize, y: bo.y + by as usize};
+                let tx_bo = BlockOffset{x: uv_bo.x + bx as usize, y: uv_bo.y + by as usize};
                 write_tx_b(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_type);
             }
         }
@@ -350,13 +362,16 @@ fn search_best_mode(fi: &FrameInvariants, fs: &mut FrameState,
     let mut best_mode = PredictionMode::DC_PRED;
     let mut best_rd = std::f64::MAX;
     let tell = cw.w.tell_frac();
+    let w = block_size_wide[bsize as usize];
+    let h = block_size_high[bsize as usize];
 
     for &mode in RAV1E_INTRA_MODES {
         let checkpoint = cw.checkpoint();
 
         write_b(fi, fs, cw, mode, bsize, bo);
         let po = bo.plane_offset(&fs.input.planes[0].cfg);
-        let d = sse_64x64(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po));
+        let d = sse_wxh(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po),
+                        w as usize, h as usize);
         let r = ((cw.w.tell_frac() - tell) as f64)/8.0;
 
         let rd = (d as f64) + lambda*r;

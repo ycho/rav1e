@@ -91,6 +91,15 @@ impl<'a> PlaneSlice<'a> {
     pub fn p(&self, add_x: usize, add_y: usize) -> u16 {
         let new_y = self.y + add_y;
         let new_x = self.x + add_x;
+
+        // for debugging
+        let stride = self.plane.cfg.stride;
+
+        if new_y*stride + new_x >= self.plane.data.len() {
+            let size = self.plane.data.len();
+            let access_violated = 1;
+        }
+        assert!(new_y*stride + new_x < self.plane.data.len());
         self.plane.data[new_y*self.plane.cfg.stride + new_x]
     }
 }
