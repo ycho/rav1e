@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
+use std::*;
 use ec;
 use partition::*;
 use partition::BlockSize::*;
@@ -27,6 +28,9 @@ const MAX_SB_SIZE_LOG2: usize = 6;
 const MAX_SB_SIZE: usize = (1 << MAX_SB_SIZE_LOG2);
 const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 
+const MAX_TX_SIZE: usize = 32;
+const MAX_TX_SQUARE: usize = MAX_TX_SIZE * MAX_TX_SIZE;
+
 const INTRA_MODES: usize = 13;
 const UV_INTRA_MODES: usize = 13;
 const BLOCK_SIZE_GROUPS: usize = 4;
@@ -45,6 +49,18 @@ pub static tx_size_wide_log2: [usize; TX_SIZES_ALL] =
     [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
 pub static tx_size_high_log2: [usize; TX_SIZES_ALL] =
     [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
+// Transform block width in pixels
+pub static tx_size_wide: [usize; TX_SIZES_ALL] =
+    [ 4, 8, 16, 32, 4, 8, 8, 16, 16, 32, 4, 16, 8, 32 ];
+// Transform block height in pixels
+pub static tx_size_high: [usize; TX_SIZES_ALL] =
+    [ 4, 8, 16, 32, 8, 4, 16, 8, 32, 16, 16, 4, 32, 8 ];
+// Transform block width in unit
+pub static tx_size_wide_unit: [usize; TX_SIZES_ALL] =
+    [1, 2, 4, 8, 1, 2, 2, 4, 4, 8, 1, 4, 2, 8];
+// Transform block height in unit
+pub static tx_size_high_unit: [usize; TX_SIZES_ALL] =
+    [1, 2, 4, 8, 2, 1, 4, 2, 8, 4, 4, 1, 8, 2];
 // Width/height lookup tables in units of various block sizes
 pub static block_size_wide: [u8; BLOCK_SIZES_ALL] =
     [4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 32, 64, 64, 4, 16, 8, 32, 16, 64 ];
@@ -57,6 +73,14 @@ const EXT_TX_SETS_INTRA: usize = 3;
 const EXT_TX_SETS_INTER: usize = 4;
 // Number of transform types in each set type
 static num_ext_tx_set: [usize; EXT_TX_SET_TYPES] = [1, 2, 5, 7, 12, 16];
+static av1_ext_tx_used: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
+  [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+  [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 ],
+  [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 ],
+  [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0 ],
+  [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0 ],
+  [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+];
 // Maps intra set index to the set type
 static ext_tx_set_type_intra: [TxSetType; EXT_TX_SETS_INTRA] = [
     TxSetType::EXT_TX_SET_DCTONLY,
@@ -138,6 +162,23 @@ static av1_coefband_trans_8x8plus: [u8; 32*32] = [
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5];
 
+static txsize_to_bsize: [BlockSize; TX_SIZES_ALL] = [
+  BLOCK_4X4,    // TX_4X4
+  BLOCK_8X8,    // TX_8X8
+  BLOCK_16X16,  // TX_16X16
+  BLOCK_32X32,  // TX_32X32
+  BLOCK_4X8,    // TX_4X8
+  BLOCK_8X4,    // TX_8X4
+  BLOCK_8X16,   // TX_8X16
+  BLOCK_16X8,   // TX_16X8
+  BLOCK_16X32,  // TX_16X32
+  BLOCK_32X16,  // TX_32X16
+  BLOCK_4X16,   // TX_4X16
+  BLOCK_16X4,   // TX_16X4
+  BLOCK_8X32,   // TX_8X32
+  BLOCK_32X8,   // TX_32X8
+];
+
 static TXSIZE_SQR_MAP: [TxSize; TX_SIZES_ALL] = [
     TX_4X4,
     TX_8X8,
@@ -171,6 +212,52 @@ static TXSIZE_SQR_UP_MAP: [TxSize; TX_SIZES_ALL] = [
     TX_32X32,
     TX_32X32,
 ];
+
+static txsize_log2_minus4: [usize; TX_SIZES_ALL] = [
+    0,  // TX_4X4
+    2,  // TX_8X8
+    4,  // TX_16X16
+    6,  // TX_32X32
+    6,  // TX_64X64
+    1,  // TX_4X8
+    1,  // TX_8X4
+    3,  // TX_8X16
+    3,  // TX_16X8
+    5,  // TX_16X32
+    5,  // TX_32X16
+    6,  // TX_32X64
+    6,  // TX_64X32
+    2,  // TX_4X16
+];
+
+static ss_size_lookup: [[[BlockSize; 2]; 2]; BLOCK_SIZES_ALL] = [
+  //  ss_x == 0    ss_x == 0        ss_x == 1      ss_x == 1
+  //  ss_y == 0    ss_y == 1        ss_y == 0      ss_y == 1
+  [  [ BLOCK_4X4, BLOCK_4X4 ], [BLOCK_4X4, BLOCK_4X4 ] ],
+  [  [ BLOCK_4X8, BLOCK_4X4 ], [BLOCK_4X4, BLOCK_4X4 ] ],
+  [  [ BLOCK_8X4, BLOCK_4X4 ], [BLOCK_4X4, BLOCK_4X4 ] ],
+  [  [ BLOCK_8X8, BLOCK_8X4 ], [BLOCK_4X8, BLOCK_4X4 ] ],
+  [  [ BLOCK_8X16, BLOCK_8X8 ], [BLOCK_4X16, BLOCK_4X8 ] ],
+  [  [ BLOCK_16X8, BLOCK_16X4 ], [BLOCK_8X8, BLOCK_8X4 ] ],
+  [  [ BLOCK_16X16, BLOCK_16X8 ], [BLOCK_8X16, BLOCK_8X8 ] ],
+  [  [ BLOCK_16X32, BLOCK_16X16 ], [BLOCK_8X32, BLOCK_8X16 ] ],
+  [  [ BLOCK_32X16, BLOCK_32X8 ], [BLOCK_16X16, BLOCK_16X8 ] ],
+  [  [ BLOCK_32X32, BLOCK_32X16 ], [BLOCK_16X32, BLOCK_16X16 ] ],
+  [  [ BLOCK_32X64, BLOCK_32X32 ], [BLOCK_16X64, BLOCK_16X32 ] ],
+  [  [ BLOCK_64X32, BLOCK_64X16 ], [BLOCK_32X32, BLOCK_32X16 ] ],
+  [  [ BLOCK_64X64, BLOCK_64X32 ], [BLOCK_32X64, BLOCK_32X32 ] ],
+  [  [ BLOCK_4X16, BLOCK_4X8 ], [BLOCK_4X16, BLOCK_4X8 ] ],
+  [  [ BLOCK_16X4, BLOCK_16X4 ], [BLOCK_8X4, BLOCK_8X4 ] ],
+  [  [ BLOCK_8X32, BLOCK_8X16 ], [BLOCK_INVALID, BLOCK_4X16 ] ],
+  [  [ BLOCK_32X8, BLOCK_INVALID ], [BLOCK_16X8, BLOCK_16X4 ] ],
+  [  [ BLOCK_16X64, BLOCK_16X32 ], [BLOCK_INVALID, BLOCK_8X32 ] ],
+  [  [ BLOCK_64X16, BLOCK_INVALID ], [BLOCK_32X16, BLOCK_32X8 ] ],
+];
+
+pub fn get_plane_block_size(bsize: BlockSize, subsampling_x: usize, subsampling_y: usize)
+    -> BlockSize {
+  ss_size_lookup[bsize as usize][subsampling_x][subsampling_y]
+}
 
 // Generates 4 bit field in which each bit set to 1 represents
 // a blocksize partition  1111 means we split 64x64, 32x32, 16x16
@@ -210,6 +297,9 @@ static size_group_lookup: [u8; BLOCK_SIZES_ALL] = [
   1, 2,
   2,
 ];
+
+static num_pels_log2_lookup: [u8; BLOCK_SIZES_ALL] = [
+  4, 5, 5, 6, 7, 7, 8, 9, 9, 10, 11, 11, 12, 6, 6, 8, 8, 10, 10];
 
 pub static subsize_lookup: [[BlockSize; BLOCK_SIZES_ALL]; PARTITION_TYPES] =
 [
@@ -311,6 +401,366 @@ const REF_TYPES: usize = 2;
 const SKIP_CONTEXTS: usize = 3;
 const INTRA_INTER_CONTEXTS: usize = 4;
 
+// Level Map
+const TXB_SKIP_CONTEXTS: usize =  13;
+
+const EOB_COEF_CONTEXTS: usize =  22;
+
+const SIG_COEF_CONTEXTS_2D: usize =  26;
+const SIG_COEF_CONTEXTS_1D: usize =  16;
+const SIG_COEF_CONTEXTS_EOB: usize =  4;
+const SIG_COEF_CONTEXTS: usize = SIG_COEF_CONTEXTS_2D + SIG_COEF_CONTEXTS_1D;
+
+const COEFF_BASE_CONTEXTS: usize = SIG_COEF_CONTEXTS;
+const DC_SIGN_CONTEXTS: usize =  3;
+
+const BR_TMP_OFFSET: usize =  12;
+const BR_REF_CAT: usize =  4;
+const LEVEL_CONTEXTS: usize =  21;
+
+const NUM_BASE_LEVELS: usize =  2;
+
+const BR_CDF_SIZE: usize = 4;
+const COEFF_BASE_RANGE: usize = 4 * (BR_CDF_SIZE - 1);
+
+const COEFF_CONTEXT_BITS: usize = 6;
+const COEFF_CONTEXT_MASK: usize = (1 << COEFF_CONTEXT_BITS) - 1;
+const MAX_BASE_BR_RANGE: usize = COEFF_BASE_RANGE + NUM_BASE_LEVELS + 1;
+
+const BASE_CONTEXT_POSITION_NUM: usize = 12;
+
+// Pad 4 extra columns to remove horizontal availability check.
+const TX_PAD_HOR_LOG2: usize = 2;
+const TX_PAD_HOR: usize = 4;
+// Pad 6 extra rows (2 on top and 4 on bottom) to remove vertical availability
+// check.
+const TX_PAD_TOP: usize = 2;
+const TX_PAD_BOTTOM: usize = 4;
+const TX_PAD_VER: usize = (TX_PAD_TOP + TX_PAD_BOTTOM);
+// Pad 16 extra bytes to avoid reading overflow in SIMD optimization.
+const TX_PAD_END: usize = 16;
+const TX_PAD_2D: usize = ((MAX_TX_SIZE + TX_PAD_HOR) * (MAX_TX_SIZE + TX_PAD_VER) + TX_PAD_END);
+
+const TX_CLASSES: usize = 3;
+
+#[derive(Copy,Clone,PartialEq)]
+pub enum TxClass {
+  TX_CLASS_2D = 0,
+  TX_CLASS_HORIZ = 1,
+  TX_CLASS_VERT = 2,
+}
+
+use context::TxClass::*;
+
+static tx_type_to_class: [TxClass; TX_TYPES] = [
+    TX_CLASS_2D,     // DCT_DCT
+    TX_CLASS_2D,     // ADST_DCT
+    TX_CLASS_2D,     // DCT_ADST
+    TX_CLASS_2D,     // ADST_ADST
+    TX_CLASS_2D,     // FLIPADST_DCT
+    TX_CLASS_2D,     // DCT_FLIPADST
+    TX_CLASS_2D,     // FLIPADST_FLIPADST
+    TX_CLASS_2D,     // ADST_FLIPADST
+    TX_CLASS_2D,     // FLIPADST_ADST
+    TX_CLASS_2D,     // IDTX
+    TX_CLASS_VERT,   // V_DCT
+    TX_CLASS_HORIZ,  // H_DCT
+    TX_CLASS_VERT,   // V_ADST
+    TX_CLASS_HORIZ,  // H_ADST
+    TX_CLASS_VERT,   // V_FLIPADST
+    TX_CLASS_HORIZ,  // H_FLIPADST
+];
+
+static eob_to_pos_small: [u8; 33] = [
+    0, 1, 2,                                        // 0-2
+    3, 3,                                           // 3-4
+    4, 4, 4, 4,                                     // 5-8
+    5, 5, 5, 5, 5, 5, 5, 5,                         // 9-16
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6  // 17-32
+];
+
+static eob_to_pos_large: [u8; 17] = [
+    6,                               // place holder
+    7,                               // 33-64
+    8,  8,                           // 65-128
+    9,  9,  9,  9,                   // 129-256
+    10, 10, 10, 10, 10, 10, 10, 10,  // 257-512
+    11                               // 513-
+];
+
+
+static k_eob_group_start: [u16; 12] = [ 0, 1, 2, 3, 5, 9,
+                                        17, 33, 65, 129, 257, 513 ];
+static k_eob_offset_bits: [u16; 12] = [ 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ];
+
+static clip_max3: [u8; 256] = [
+  0, 1, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 ];
+
+// The ctx offset table when TX is TX_CLASS_2D.
+// TX col and row indices are clamped to 4
+
+static av1_nz_map_ctx_offset_4x4: [i8; 16] = [
+  0, 1, 6, 6, 1, 6, 6, 21, 6, 6, 21, 21, 6, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_8x8: [i8; 64] = [
+  0,  1,  6,  6,  21, 21, 21, 21, 1,  6,  6,  21, 21, 21, 21, 21,
+  6,  6,  21, 21, 21, 21, 21, 21, 6,  21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_16x16: [i8; 256] = [
+  0,  1,  6,  6,  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 1,  6,  6,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 6,  6,  21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 6,  21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_32x32: [i8; 1024] = [
+  0,  1,  6,  6,  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 1,  6,  6,  21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 6,  6,  21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 6,  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_8x4: [i8; 32] = [
+  0,  16, 6,  6,  21, 21, 21, 21, 16, 16, 6,  21, 21, 21, 21, 21,
+  16, 16, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_8x16: [i8; 128] = [
+  0,  11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 6,  6,  21,
+  21, 21, 21, 21, 21, 6,  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_16x8: [i8; 128] = [
+  0,  16, 6,  6,  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 6,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_16x32: [i8; 512] = [
+  0,  11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
+  11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 6,  6,  21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 6,  21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_32x16: [i8; 512] = [
+  0,  16, 6,  6,  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 6,  21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_4x16: [i8; 64] = [
+  0,  11, 11, 11, 11, 11, 11, 11, 6,  6,  21, 21, 6,  21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_16x4: [i8; 64] = [
+  0,  16, 6,  6,  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  16, 16, 6,  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_8x32: [i8; 256] = [
+  0,  11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 6,  6,  21,
+  21, 21, 21, 21, 21, 6,  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset_32x8: [i8; 256] = [
+  0,  16, 6,  6,  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 6,  21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 16, 16, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 16, 16, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21 ];
+
+static av1_nz_map_ctx_offset: [&[i8]; TX_SIZES_ALL] = [
+  &av1_nz_map_ctx_offset_4x4,    // TX_4x4
+  &av1_nz_map_ctx_offset_8x8,    // TX_8x8
+  &av1_nz_map_ctx_offset_16x16,  // TX_16x16
+  &av1_nz_map_ctx_offset_32x32,  // TX_32x32
+  //&av1_nz_map_ctx_offset_32x32,  // TX_32x32
+  &av1_nz_map_ctx_offset_4x16,   // TX_4x8
+  &av1_nz_map_ctx_offset_8x4,    // TX_8x4
+  &av1_nz_map_ctx_offset_8x32,   // TX_8x16
+  &av1_nz_map_ctx_offset_16x8,   // TX_16x8
+  &av1_nz_map_ctx_offset_16x32,  // TX_16x32
+  &av1_nz_map_ctx_offset_32x16,  // TX_32x16
+  //&av1_nz_map_ctx_offset_32x64,  // TX_32x64
+  //&av1_nz_map_ctx_offset_64x32,  // TX_64x32
+  &av1_nz_map_ctx_offset_4x16,   // TX_4x16
+  &av1_nz_map_ctx_offset_16x4,   // TX_16x4
+  &av1_nz_map_ctx_offset_8x32,   // TX_8x32
+  &av1_nz_map_ctx_offset_32x8,   // TX_32x8
+  //&av1_nz_map_ctx_offset_16x32,  // TX_16x64
+  //&av1_nz_map_ctx_offset_64x32,  // TX_64x16
+];
+
+const NZ_MAP_CTX_0: usize = SIG_COEF_CONTEXTS_2D;
+const NZ_MAP_CTX_5: usize = (NZ_MAP_CTX_0 + 5);
+const NZ_MAP_CTX_10: usize = (NZ_MAP_CTX_0 + 10);
+
+static nz_map_ctx_offset_1d: [usize; 32] = [
+  NZ_MAP_CTX_0,  NZ_MAP_CTX_5,  NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10,
+  NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10,
+  NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10,
+  NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10,
+  NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10,
+  NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10,
+  NZ_MAP_CTX_10, NZ_MAP_CTX_10 ];
+// End of Level Map
+
+pub fn clamp(val: i32, min: i32, max: i32) -> i32 {
+    if val < min {
+        min
+    }
+    else if val > max {
+        max
+    }
+    else {
+        val
+    }
+}
+
 fn get_ext_tx_set_type(tx_size: TxSize, is_inter: bool, use_reduced_set: bool) -> TxSetType {
     let tx_size_sqr_up = TXSIZE_SQR_UP_MAP[tx_size as usize];
     let tx_size_sqr = TXSIZE_SQR_MAP[tx_size as usize];
@@ -401,7 +851,6 @@ pub fn uv_intra_mode_to_tx_type_context(pred: PredictionMode)-> TxType {
     //intra_mode_to_tx_type_context[uv2y[pred as usize] as usize]
 }
 
-
 extern {
     static default_partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
     static default_kf_y_mode_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES];
@@ -433,6 +882,26 @@ extern {
     fn build_tail_cdfs(cdf_tail: &mut [u16; ENTROPY_TOKENS + 1],
                     cdf_head: &mut [u16; ENTROPY_TOKENS + 1],
                     band_zero: c_int);
+
+    // lv_map
+    static default_txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TX_SIZES];
+    static default_dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; TX_SIZES];
+    static default_eob_extra_cdf: [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TX_SIZES];
+    
+    static default_eob_multi16: [[[u16; 5+1]; 2]; PLANE_TYPES];
+    static default_eob_multi32: [[[u16; 6+1]; 2]; PLANE_TYPES];
+    static default_eob_multi64: [[[u16; 7+1]; 2]; PLANE_TYPES];
+    static default_eob_multi128: [[[u16; 8+1]; 2]; PLANE_TYPES];
+    static default_eob_multi256: [[[u16; 9+1]; 2]; PLANE_TYPES];
+    static default_eob_multi512: [[[u16; 10+1]; 2]; PLANE_TYPES];
+    static default_eob_multi1024: [[[u16; 11+1]; 2]; PLANE_TYPES];
+
+    static default_coeff_base_eob_multi: [[[[u16; 3+1]; SIG_COEF_CONTEXTS_EOB]; 
+                                          PLANE_TYPES]; TX_SIZES];
+    static default_coeff_base_multi: [[[[u16; 4+1]; SIG_COEF_CONTEXTS]; 
+                                      PLANE_TYPES]; TX_SIZES];
+    static default_coeff_lps_multi: [[[[u16; BR_CDF_SIZE+1]; LEVEL_CONTEXTS]; 
+                                      PLANE_TYPES]; TX_SIZES];
 }
 
 #[repr(C)]
@@ -458,6 +927,26 @@ pub struct CDFContext {
     skip_cdfs: [[u16; 3];SKIP_CONTEXTS],
     intra_inter_cdfs: [[u16; 3];INTRA_INTER_CONTEXTS],
     angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
+
+    // lv_map
+    txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TX_SIZES],
+    dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; TX_SIZES],
+    eob_extra_cdf: [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TX_SIZES],
+
+    eob_flag_cdf16: [[[u16; 5+1]; 2]; PLANE_TYPES],
+    eob_flag_cdf32: [[[u16; 6+1]; 2]; PLANE_TYPES],
+    eob_flag_cdf64: [[[u16; 7+1]; 2]; PLANE_TYPES],
+    eob_flag_cdf128: [[[u16; 8+1]; 2]; PLANE_TYPES],
+    eob_flag_cdf256: [[[u16; 9+1]; 2]; PLANE_TYPES],
+    eob_flag_cdf512: [[[u16; 10+1]; 2]; PLANE_TYPES],
+    eob_flag_cdf1024: [[[u16; 11+1]; 2]; PLANE_TYPES],
+
+    coeff_base_eob_cdf: [[[[u16; 3+1]; SIG_COEF_CONTEXTS_EOB]; PLANE_TYPES];
+                          TX_SIZES],
+    coeff_base_cdf: [[[[u16; 4+1]; SIG_COEF_CONTEXTS]; PLANE_TYPES];
+                          TX_SIZES],
+    coeff_br_cdf: [[[[u16; BR_CDF_SIZE+1]; LEVEL_CONTEXTS]; PLANE_TYPES];
+                          TX_SIZES],
 }
 
 impl CDFContext {
@@ -477,7 +966,24 @@ impl CDFContext {
                 128...191 => av1_default_coef_head_cdfs_q2,
                 _ => av1_default_coef_head_cdfs_q3,
             },
-            coef_tail_cdfs: Default::default()
+            coef_tail_cdfs: Default::default(),
+            // lv_map
+            txb_skip_cdf: default_txb_skip_cdf,
+            dc_sign_cdf: default_dc_sign_cdf,
+            eob_extra_cdf: default_eob_extra_cdf,
+
+            eob_flag_cdf16: default_eob_multi16,
+            eob_flag_cdf32: default_eob_multi32,
+            eob_flag_cdf64: default_eob_multi64,
+            eob_flag_cdf128: default_eob_multi128,
+            eob_flag_cdf256: default_eob_multi256,
+            eob_flag_cdf512: default_eob_multi512,
+            eob_flag_cdf1024: default_eob_multi1024,
+
+            coeff_base_eob_cdf: default_coeff_base_eob_multi,
+            coeff_base_cdf: default_coeff_base_multi,
+            coeff_br_cdf: default_coeff_lps_multi
+
         };
         for t in 0..TX_SIZES {
             for i in 0..PLANE_TYPES {
@@ -494,6 +1000,7 @@ impl CDFContext {
                 }
             }
         }
+
         c
     }
 }
@@ -580,6 +1087,11 @@ impl Block {
     pub fn is_inter(&self) -> bool {
         self.mode >= PredictionMode::NEARESTMV
     }
+}
+
+pub struct  TXB_CTX {
+    pub txb_skip_ctx: usize,
+    pub dc_sign_ctx: usize,
 }
 
 #[derive(Clone, Default)]
@@ -765,6 +1277,95 @@ impl BlockContext {
             (_, _) => 0,
         }
     }
+
+    pub fn get_txb_ctx(&mut self, plane_bsize: BlockSize, tx_size: TxSize,
+                       plane: usize, bo: &BlockOffset) -> TXB_CTX {
+        let mut txb_ctx = TXB_CTX { txb_skip_ctx: 0,
+                                dc_sign_ctx: 0 };
+        const MAX_TX_SIZE_UNIT: usize = 16;
+        const signs: [i8; 3] = [ 0, -1, 1 ];
+        const dc_sign_contexts: [usize; 4 * MAX_TX_SIZE_UNIT + 1] = [
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
+        let mut dc_sign: i16 = 0;
+        let txb_w_unit = tx_size_wide_unit[tx_size as usize];
+        let txb_h_unit = tx_size_high_unit[tx_size as usize];
+
+        // Decide txb_ctx.dc_sign_ctx
+        for k in 0..txb_w_unit {
+            let sign = self.above_coeff_context[plane][bo.x + k] >> COEFF_CONTEXT_BITS;
+            assert!(sign <= 2);
+            dc_sign += signs[sign as usize] as i16; 
+        }
+
+        for k in 0..txb_h_unit {
+            let sign = self.left_coeff_context[plane][bo.y_in_sb() + k] >> COEFF_CONTEXT_BITS;
+            assert!(sign <= 2);
+            dc_sign += signs[sign as usize] as i16; 
+        }
+
+        txb_ctx.dc_sign_ctx = dc_sign_contexts[(dc_sign + 2 * MAX_TX_SIZE_UNIT as i16) as usize];
+
+        // Decide txb_ctx.txb_skip_ctx
+        if plane == 0 {
+            if plane_bsize == txsize_to_bsize[tx_size as usize] {
+              txb_ctx.txb_skip_ctx = 0;
+            } else {
+                // This is the algorithm to generate table skip_contexts[min][max].
+                //    if (!max)
+                //      txb_skip_ctx = 1;
+                //    else if (!min)
+                //      txb_skip_ctx = 2 + (max > 3);
+                //    else if (max <= 3)
+                //      txb_skip_ctx = 4;
+                //    else if (min <= 3)
+                //      txb_skip_ctx = 5;
+                //    else
+                //      txb_skip_ctx = 6;
+                const skip_contexts: [[u8; 5]; 5] = [ [ 1, 2, 2, 2, 3 ],
+                                                     [ 1, 4, 4, 4, 5 ],
+                                                     [ 1, 4, 4, 4, 5 ],
+                                                     [ 1, 4, 4, 4, 5 ],
+                                                     [ 1, 4, 4, 4, 6 ] ];
+                let mut top: u8 = 0;
+                let mut left: u8 = 0;
+
+                for k in 0..txb_w_unit {
+                    top |= self.above_coeff_context[plane][bo.x + k];
+                }
+                top &= COEFF_CONTEXT_MASK as u8;
+
+                for k in 0..txb_h_unit {
+                    left |= self.left_coeff_context[plane][bo.y_in_sb() + k];
+                }
+                left &= COEFF_CONTEXT_MASK as u8;
+
+                let max = cmp::min(top | left, 4);
+                let min = cmp::min(cmp::min(top, left), 4);
+                txb_ctx.txb_skip_ctx = skip_contexts[min as usize][max as usize] as usize;
+            }
+
+        } else {
+            let mut top: u8 = 0;
+            let mut left: u8 = 0;
+
+            for k in 0..txb_w_unit {
+                top |= self.above_coeff_context[plane][bo.x + k];
+            }
+            for k in 0..txb_h_unit {
+                left |= self.left_coeff_context[plane][bo.y_in_sb() + k];
+            }
+            let ctx_base = (top != 0) as usize + (left != 0) as usize;
+            let ctx_offset = if num_pels_log2_lookup[plane_bsize as usize] >
+                                 num_pels_log2_lookup[txsize_to_bsize[tx_size as usize] as usize]
+                                { 10 }
+                             else { 7 };
+            txb_ctx.txb_skip_ctx = ctx_base + ctx_offset;
+        }
+
+        txb_ctx
+    }
 }
 
 #[derive(Clone)]
@@ -853,6 +1454,34 @@ impl ContextWriter {
                 av1_ext_tx_intra_ind[eset as usize][tx_type as usize],
                 &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][y_mode as usize],
                 ext_tx_cnt_intra[eset as usize]);
+        }
+    }
+    pub fn write_tx_type_lv_map(&mut self, tx_size: TxSize, tx_type: TxType, 
+                                y_mode: PredictionMode, is_inter: bool) {
+        let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
+
+        let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, false);
+        let num_tx_types = num_ext_tx_set[tx_set_type as usize];
+
+        if num_tx_types > 1 {
+          let eset = get_ext_tx_set(tx_size, is_inter, false);
+          assert!(eset > 0);
+          assert!(av1_ext_tx_used[tx_set_type as usize][tx_type as usize] != 0);
+
+          if is_inter {
+              // TODO: Support inter mode once inter is enabled.
+              assert!(false);
+          } else {
+              let intra_dir = y_mode;
+              // TODO: Once use_filter_intra is enabled,
+              // intra_dir =
+              // fimode_to_intradir[mbmi->filter_intra_mode_info.filter_intra_mode];
+
+              self.w.symbol(
+                  av1_ext_tx_intra_ind[tx_set_type as usize][tx_type as usize],
+                  &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][intra_dir as usize],
+                  num_ext_tx_set[tx_set_type as usize]);
+          }
         }
     }
     pub fn write_skip(&mut self, bo: &BlockOffset, skip: bool) {
@@ -982,6 +1611,364 @@ impl ContextWriter {
                 break;
             }
         }
+        self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, true);
+    }
+
+    pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
+      (TXSIZE_SQR_MAP[tx_size as usize] as usize + TXSIZE_SQR_MAP[tx_size as usize] as usize + 1) >> 1
+    }
+
+    pub fn txb_init_levels(&mut self, coeffs: &[i32], width: usize, height: usize, 
+                                levels_buf: &mut [u8]) {
+        let stride = width + TX_PAD_HOR;
+        let mut offset = TX_PAD_TOP * (width + TX_PAD_HOR);
+
+        for i in 0..TX_PAD_TOP * stride { levels_buf[i] = 0; }
+        for i in 0..height * stride { levels_buf[offset + i] = 0; }
+
+        for y in 0..height {
+            for x in 0..width {
+                levels_buf[offset] = clamp(coeffs[y*width + x], 0, 127) as u8;
+                offset += 1;
+            }
+            for x in 0..TX_PAD_HOR {
+                levels_buf[offset] = 0;
+                offset += 1;
+            }
+        }
+    }
+
+    pub fn get_tx_type(&mut self, tx_size: TxSize, is_inter: bool,
+                            use_reduced_set: bool) -> TxType {
+        let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, use_reduced_set);
+
+        // TODO: Implement av1_get_tx_type() here
+        let tx_type = TxType::DCT_DCT;
+
+        tx_type
+    }
+
+    pub fn av1_get_adjusted_tx_size(&mut self, tx_size: TxSize) -> TxSize {
+      // TODO: Enable below commented out block if TX64X64 is enabled.
+/*
+      if tx_size == TX_64X64 || tx_size == TX_64X32 || tx_size == TX_32X64 {
+        return TX_32X32
+      }
+      if (tx_size == TX_16X64) {
+        return TX_16X32
+      }
+      if (tx_size == TX_64X16) {
+        return TX_32X16
+      }
+*/
+      tx_size
+    }
+
+    pub fn get_txb_bwl(&mut self, tx_size: TxSize) -> usize {
+      let adjusted_tx_size = self.av1_get_adjusted_tx_size(tx_size);
+
+      return tx_size_wide_log2[adjusted_tx_size as usize]
+    }
+
+    pub fn get_eob_pos_token(&mut self, eob: usize, extra: &mut u32) -> u32 {
+        let t: u32;
+
+        if eob < 33 {
+          t = eob_to_pos_small[eob] as u32;
+        } else {
+          let e = cmp::min((eob - 1) >> 5, 16);
+          t = eob_to_pos_large[e as usize] as u32;
+        }
+        assert!(eob as i32 >= k_eob_group_start[t as usize] as i32);
+        *extra = eob as u32 - k_eob_group_start[t as usize] as u32;
+
+        t
+    }
+
+    pub fn get_nz_mag(&mut self, levels: &[u8],
+                      bwl: usize, tx_class: TxClass) -> usize {
+
+      // Note: AOMMIN(level, 3) is useless for decoder since level < 3.
+      let mut mag = clip_max3[levels[1] as usize];                 // { 0, 1 }
+      mag += clip_max3[levels[(1 << bwl) + TX_PAD_HOR] as usize];  // { 1, 0 }
+
+      if tx_class == TX_CLASS_2D {
+        mag += clip_max3[levels[(1 << bwl) + TX_PAD_HOR + 1] as usize];          // { 1, 1 }
+        mag += clip_max3[levels[2] as usize];                                    // { 0, 2 }
+        mag += clip_max3[levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)] as usize];  // { 2, 0 }
+      } else if tx_class == TX_CLASS_VERT {
+        mag += clip_max3[levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)] as usize];  // { 2, 0 }
+        mag += clip_max3[levels[(3 << bwl) + (3 << TX_PAD_HOR_LOG2)] as usize];  // { 3, 0 }
+        mag += clip_max3[levels[(4 << bwl) + (4 << TX_PAD_HOR_LOG2)] as usize];  // { 4, 0 }
+      } else {
+        mag += clip_max3[levels[2] as usize];  // { 0, 2 }
+        mag += clip_max3[levels[3] as usize];  // { 0, 3 }
+        mag += clip_max3[levels[4] as usize];  // { 0, 4 }
+      }
+
+      mag as usize
+    }
+
+    pub fn get_nz_map_ctx_from_stats(&mut self, stats: usize,
+                                      coeff_idx: usize,  // raster order
+                                      bwl: usize, tx_size: TxSize,
+                                      tx_class: TxClass) -> usize {
+        if (tx_class as u32 | coeff_idx as u32) == 0 { return 0 };
+        let mut ctx = (stats + 1) >> 1;
+        ctx = cmp::min(ctx, 4);
+
+        match tx_class {
+          TX_CLASS_2D => {
+            // This is the algorithm to generate av1_nz_map_ctx_offset[][]
+            //   const int width = tx_size_wide[tx_size];
+            //   const int height = tx_size_high[tx_size];
+            //   if (width < height) {
+            //     if (row < 2) return 11 + ctx;
+            //   } else if (width > height) {
+            //     if (col < 2) return 16 + ctx;
+            //   }
+            //   if (row + col < 2) return ctx + 1;
+            //   if (row + col < 4) return 5 + ctx + 1;
+            //   return 21 + ctx;
+            return ctx + av1_nz_map_ctx_offset[tx_size as usize][coeff_idx] as usize
+          }
+          TX_CLASS_HORIZ => {
+            let row = coeff_idx >> bwl;
+            let col = coeff_idx - (row << bwl);
+            return ctx + nz_map_ctx_offset_1d[col as usize]
+          }
+          TX_CLASS_VERT => {
+            let row = coeff_idx >> bwl;
+            return ctx + nz_map_ctx_offset_1d[row]
+          }
+        }
+    }
+
+    pub fn get_nz_map_ctx(&mut self, levels: &[u8], coeff_idx: usize, bwl: usize,
+                          height: usize, scan_idx: usize,
+                          is_eob: bool, tx_size: TxSize,
+                          tx_class: TxClass) -> usize {
+        if is_eob {
+            if scan_idx == 0 { return 0 }
+            if scan_idx <= (height << bwl) / 8 { return 1 }
+            if scan_idx <= (height << bwl) / 4 { return 2 }
+            return 3
+        }
+        let padded_idx = coeff_idx + ((coeff_idx >> bwl) << TX_PAD_HOR_LOG2);
+        let stats =
+            self.get_nz_mag(&levels[padded_idx..], bwl, tx_class);
+
+        return self.get_nz_map_ctx_from_stats(stats, coeff_idx, bwl, tx_size,
+                    tx_class)
+    }
+
+    pub fn get_nz_map_contexts(&mut self, levels: &mut [u8], scan: &[u16; 4096], eob: u16,
+                                 tx_size: TxSize, tx_class: TxClass,
+                                 coeff_contexts: &mut [i8]) {
+        // TODO: If TX_64X64 is enabled, use av1_get_adjusted_tx_size()
+        let bwl = tx_size_wide_log2[tx_size as usize];
+        let height = tx_size_high[tx_size as usize];
+        for i in 0..eob {
+            let pos = scan[i as usize];
+            coeff_contexts[pos as usize] =
+                self.get_nz_map_ctx(levels, pos as usize, bwl, height, i as usize,
+                               i == eob - 1, tx_size, tx_class) as i8;
+        }
+    }
+
+    pub fn get_br_ctx(&mut self, levels: &[u8], c: usize,  // raster order
+                      bwl: usize, tx_class: TxClass) -> usize {
+        let row: usize = c >> bwl;
+        let col: usize = c - (row << bwl);
+        let stride: usize = (1 << bwl) + TX_PAD_HOR;
+        let pos: usize = row * stride + col;
+        let mut mag: usize = levels[pos + 1] as usize;
+
+        mag += levels[pos + stride] as usize;
+
+        match tx_class {
+            TX_CLASS_2D => {
+              mag += levels[pos + stride + 1] as usize;
+              mag = cmp::min((mag + 1) >> 1, 6);
+              if c == 0 { return mag }
+              if (row < 2) && (col < 2) { return mag + 7 }
+            }
+            TX_CLASS_HORIZ => {
+              mag += levels[pos + 2] as usize;
+              mag = cmp::min((mag + 1) >> 1, 6);
+              if c == 0 { return mag }
+              if col == 0 { return mag + 7 }
+            }
+            TX_CLASS_VERT => {
+              mag += levels[pos + (stride << 1)] as usize;
+              mag = cmp::min((mag + 1) >> 1, 6);
+              if c == 0 { return mag }
+              if row == 0 { return mag + 7 }
+            }
+        }
+
+        return mag + 14
+    }
+
+    pub fn write_coeffs_lv_map(&mut self, plane: usize, bo: &BlockOffset,
+                        coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType,
+                        plane_bsize: BlockSize, xdec: usize, ydec: usize) {
+        let scan_order = &av1_intra_scan_orders[tx_size as usize][tx_type as usize];
+        let scan = scan_order.scan;
+        let mut coeffs_storage = [0 as i32; 64*64];
+        let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
+
+        for i in 0..tx_size.width()*tx_size.height() {
+            coeffs[i] = coeffs_in[scan[i] as usize];
+        }
+        let mut eob = 0;
+        for (i, v) in coeffs.iter().enumerate() {
+            if *v != 0 {
+                eob = i + 1;
+            }
+        }
+
+        if plane == 0 && eob == 0 {
+            assert!(tx_type == TxType::DCT_DCT);
+        }
+
+        let txs_ctx = self.get_txsize_entropy_ctx(tx_size);
+        let txb_ctx = self.bc.get_txb_ctx(plane_bsize, tx_size, plane, bo);
+
+        {
+          let cdf = &mut self.fc.txb_skip_cdf[txs_ctx][txb_ctx.txb_skip_ctx];
+          self.w.symbol((eob == 0) as u32, cdf, 2);
+        }
+
+        if eob == 0 {
+            self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, false);
+            return;
+        }
+/*
+        let plane_type = if plane > 0 { 1 } else { 0 };
+        let tx_size_ctx = TXSIZE_SQR_MAP[tx_size as usize] as usize;
+        let ref_type = 0;
+        let neighbors = scan_order.neighbors;
+        let mut token_cache = [0 as u8; 64*64];
+*/
+        let mut levels_buf = [0 as u8; TX_PAD_2D];
+        //let mut levels = &mut levels_buf[TX_PAD_TOP * ( tx_size.width() + TX_PAD_HOR)..];
+
+       // self.txb_init_levels(coeffs_in, tx_size.width(), tx_size.height(), &mut levels);
+        self.txb_init_levels(coeffs_in, tx_size.width(), tx_size.height(), &mut levels_buf);
+
+        let pred_mode = self.bc.get_mode(bo);
+        let is_inter = pred_mode >= PredictionMode::NEARESTMV;
+
+        //let tx_type = self.get_tx_type(tx_size, is_inter, false);
+        let tx_class = tx_type_to_class[tx_type as usize];
+        let plane_type = if plane == 0 { 0 as usize} else { 1 as usize };
+
+        // Only y plane's tx_type is transmitted
+        if plane == 0 {
+            self.write_tx_type_lv_map(tx_size, tx_type, pred_mode, is_inter);
+        }
+
+        // Encode EOB
+        let mut eob_extra = 0 as u32;
+        let eob_pt = self.get_eob_pos_token(eob, &mut eob_extra);
+        let eob_multi_size: usize = txsize_log2_minus4[tx_size as usize];
+        let eob_multi_ctx: usize = if tx_class == TX_CLASS_2D { 0 } else { 1 };
+
+        match eob_multi_size {
+          0 => { self.w.symbol(eob_pt - 1,
+                     &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx], 5); }
+          1 => { self.w.symbol(eob_pt - 1,
+                     &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx], 6); }
+          2 => { self.w.symbol(eob_pt - 1,
+                     &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx], 7); }
+          3 => { self.w.symbol(eob_pt - 1,
+                     &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx], 8); }
+          4 => { self.w.symbol(eob_pt - 1,
+                     &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx], 9); }
+          5 => { self.w.symbol(eob_pt - 1,
+                     &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx], 10); }
+          _ => { self.w.symbol(eob_pt - 1,
+                     &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx], 11); }
+        };
+
+        let eob_offset_bits = k_eob_offset_bits[eob_pt as usize];
+
+        if eob_offset_bits > 0 {
+            let mut eob_shift = eob_offset_bits - 1;
+            let mut bit = if (eob_extra & (1 << eob_shift)) != 0 { 1 } else { 0 } as u32;
+            self.w.symbol(bit,
+              &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][eob_pt as usize],
+                             2);
+            for i in 1..eob_offset_bits {
+              eob_shift = eob_offset_bits as u16 - 1 - i as u16;
+              bit = if (eob_extra & (1 << eob_shift)) != 0 { 1 as u32 } else { 0 as u32};
+              self.w.bit(bit);
+            }
+        }
+
+        let mut coeff_contexts = [0 as i8; MAX_TX_SQUARE];
+        let levels = &mut levels_buf[TX_PAD_TOP * (tx_size.width() + TX_PAD_HOR)..];
+
+        self.get_nz_map_contexts(levels, scan, eob as u16, tx_size,
+                                 tx_class, &mut coeff_contexts);
+
+        let bwl = self.get_txb_bwl(tx_size);
+
+        for c in (0..eob).rev() {
+            let pos = scan[c];
+            let coeff_ctx = coeff_contexts[pos as usize];
+            let v = coeffs_in[pos as usize];
+            let level: u32 = v.abs() as u32;
+
+            if c == eob - 1 {
+                self.w.symbol((cmp::min(level, 3) - 1) as u32,
+                    &mut self.fc.coeff_base_eob_cdf[
+                    txs_ctx][plane_type][coeff_ctx as usize], 3);
+            } else {
+                self.w.symbol((cmp::min(level, 3)) as u32,
+                                 &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize],
+                                 4);
+            }
+            if level > NUM_BASE_LEVELS as u32 {
+                let base_range = level - 1 - NUM_BASE_LEVELS as u32;
+                let br_ctx = self.get_br_ctx(levels, pos as usize, bwl, tx_class);
+                let mut idx = 0;
+
+                loop {
+                  if idx >= COEFF_BASE_RANGE { break; }
+                  let k = cmp::min(base_range - idx as u32, BR_CDF_SIZE as u32 - 1);
+                  self.w.symbol(k as u32, &mut self.fc.coeff_br_cdf[
+                          cmp::min(txs_ctx, TxSize::TX_32X32 as usize)]
+                          [plane_type][br_ctx], BR_CDF_SIZE);
+                  if k < BR_CDF_SIZE as u32 - 1 { break; }
+                  idx += BR_CDF_SIZE - 1;
+                }
+            }
+        }
+
+        // Loop to code all signs in the transform block,
+        // starting with the sign of DC (if applicable)
+        for c in 0..eob {
+            let v = coeffs_in[scan[c] as usize];
+            let level = v.abs() as u32;
+            //let sign = if v < 0 { 1 } else { 0 };
+            let sign = (v < 0) as u32;
+            if level != 0 {
+                if c == 0 {
+                    self.w.symbol(sign, &mut self.fc.dc_sign_cdf[plane_type]
+                                  [txb_ctx.dc_sign_ctx], 2);
+                } else {
+                    self.w.bit(sign);
+                }
+                if level > (COEFF_BASE_RANGE + NUM_BASE_LEVELS) as u32 {
+                    let pos = scan[c];
+                    self.w.write_golomb(coeffs_in[pos as usize].abs() as u32 -
+                        (COEFF_BASE_RANGE - 1 - NUM_BASE_LEVELS) as u32);
+                }
+            }
+        }
+
         self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, true);
     }
 
