@@ -342,6 +342,8 @@ mod test {
         fn od_ec_dec_init(dec: *mut od_ec_dec, buf: *const ::std::os::raw::c_uchar, storage: u32);
         fn od_ec_decode_bool_q15(dec: *mut od_ec_dec, f: ::std::os::raw::c_uint) -> ::std::os::raw::c_int;
         fn od_ec_decode_cdf_q15(dec: *mut od_ec_dec, cdf: *const u16, nsyms: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+        fn aom_read_symbol_for_rav1e(dec: *mut od_ec_dec, cdf: *mut u16,
+                            nsymbs: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
     }
 
     impl<'a> Reader<'a> {
@@ -363,6 +365,9 @@ mod test {
         fn cdf(&mut self, icdf: &[u16]) -> i32 {
             let nsyms = icdf.len();
             unsafe { od_ec_decode_cdf_q15(&mut self.dec, icdf.as_ptr(), nsyms as i32) }
+        }
+        fn read_symbol(&mut self, aom_cdf: &mut [u16], nsyms: i32) -> i32 {
+            unsafe { aom_read_symbol_for_rav1e(&mut self.dec, aom_cdf.as_mut_ptr(), nsyms as i32) }
         }
     }
 
@@ -459,6 +464,38 @@ mod test {
         assert_eq!(r.cdf(&cdf), 2);
         assert_eq!(r.cdf(&cdf), 2);
         assert_eq!(r.cdf(&cdf), 2);
+    }
 
+    #[test]
+    fn cdf_adapt() {
+        let nsyms = 5;
+        let mut aom_cdf: [u16; 6] = [25000, 20000, 15000, 10000, 0, 0];
+
+        let mut w = Writer::new();
+
+        w.symbol(0, &mut aom_cdf, nsyms);
+        /*w.symbol(1, &mut aom_cdf, nsyms);
+        w.symbol(2, &mut aom_cdf, nsyms);
+        w.symbol(3, &mut aom_cdf, nsyms);
+        w.symbol(4, &mut aom_cdf, nsyms);
+        w.symbol(3, &mut aom_cdf, nsyms);
+        w.symbol(2, &mut aom_cdf, nsyms);
+        w.symbol(1, &mut aom_cdf, nsyms);
+        w.symbol(0, &mut aom_cdf, nsyms);*/
+
+        let b = w.done();
+
+        aom_cdf = [25000, 20000, 15000, 10000, 0, 0];
+        let mut r = Reader::new(&b);
+
+        assert_eq!(r.read_symbol(&mut aom_cdf, nsyms as i32), 0);
+        /*assert_eq!(r.read_symbol(&mut aom_cdf, nsyms as i32), 1);
+        assert_eq!(r.read_symbol(&mut aom_cdf, nsyms as i32), 2);
+        assert_eq!(r.read_symbol(&mut aom_cdf, nsyms as i32), 3);
+        assert_eq!(r.read_symbol(&mut aom_cdf, nsyms as i32), 4);
+        assert_eq!(r.read_symbol(&mut aom_cdf, nsyms as i32), 3);
+        assert_eq!(r.read_symbol(&mut aom_cdf, nsyms as i32), 2);
+        assert_eq!(r.read_symbol(&mut aom_cdf, nsyms as i32), 1);
+        assert_eq!(r.read_symbol(&mut aom_cdf, nsyms as i32), 0);*/
     }
 }
