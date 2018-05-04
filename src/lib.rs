@@ -383,7 +383,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     //cw.write_coeffs(p, bo, &coeffs, tx_size, tx_type, xdec, ydec);
 
     // FOR DEV TEST PURPOSE ONLY, until whole lv-map is implemented
-    for i in 0..tx_size.width()*tx_size.height() {
+    for i in 1..tx_size.width()*tx_size.height() {
         coeffs[i] = 0;
     }
     cw.write_coeffs_lv_map(p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec);
