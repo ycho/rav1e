@@ -69,7 +69,7 @@ pub static block_size_high: [u8; BLOCK_SIZES_ALL] =
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 6;
-const EXT_TX_SETS_INTRA: usize = 3;
+const EXT_TX_SETS_INTRA: usize = 6;
 const EXT_TX_SETS_INTER: usize = 4;
 // Number of transform types in each set type
 static num_ext_tx_set: [usize; EXT_TX_SET_TYPES] = [1, 2, 5, 7, 12, 16];
@@ -82,11 +82,11 @@ static av1_ext_tx_used: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
   [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
 ];
 // Maps intra set index to the set type
-static ext_tx_set_type_intra: [TxSetType; EXT_TX_SETS_INTRA] = [
+/*static ext_tx_set_type_intra: [TxSetType; EXT_TX_SETS_INTRA] = [
     TxSetType::EXT_TX_SET_DCTONLY,
     TxSetType::EXT_TX_SET_DTT4_IDTX_1DDCT,
     TxSetType::EXT_TX_SET_DTT4_IDTX
-];
+];*/
 // Maps inter set index to the set type
 #[allow(dead_code)]
 static ext_tx_set_type_inter: [TxSetType; EXT_TX_SETS_INTER] = [
@@ -101,9 +101,12 @@ static ext_tx_set_index_intra: [i8; EXT_TX_SET_TYPES] = [0, -1, 2, 1, -1, -1 ];
 static ext_tx_set_index_inter: [i8; EXT_TX_SET_TYPES] = [0, 3, -1, -1, 2, 1];
 static av1_ext_tx_intra_ind: [[u32; TX_TYPES]; EXT_TX_SETS_INTRA] =
     [
-        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],
-        [1,5,6,4,0,0,0,0,0,0,2,3,0,0,0,0,],
-        [1,3,4,2,0,0,0,0,0,0,0,0,0,0,0,0,],
+      [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 1, 3, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+      [ 1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0 ],
+      [ 3, 4, 5, 8, 6, 7, 9, 10, 11, 0, 1, 2, 0, 0, 0, 0 ],
+      [ 7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6 ],
     ];
 #[allow(dead_code)]
 static av1_ext_tx_inter_ind: [[usize; TX_TYPES]; EXT_TX_SETS_INTER] =
@@ -113,7 +116,7 @@ static av1_ext_tx_inter_ind: [[usize; TX_TYPES]; EXT_TX_SETS_INTER] =
         [1,3,4,2,0,0,0,0,0,0,0,0,0,0,0,0,],
         [0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,],
     ];
-static ext_tx_cnt_intra: [usize;EXT_TX_SETS_INTRA] = [ 1, 7, 5 ];
+//static ext_tx_cnt_intra: [usize;EXT_TX_SETS_INTRA] = [ 1, 7, 5 ];
 
 static av1_coefband_trans_4x4: [u8; 16] = [
     0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5,
@@ -1445,6 +1448,7 @@ impl ContextWriter {
                      &mut self.fc.angle_delta_cdf[mode as usize - PredictionMode::V_PRED as usize],
                      2 * MAX_ANGLE_DELTA + 1);
     }
+/*
     pub fn write_tx_type(&mut self, tx_size: TxSize, tx_type: TxType, y_mode: PredictionMode) {
         let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
         let eset =
@@ -1456,6 +1460,7 @@ impl ContextWriter {
                 ext_tx_cnt_intra[eset as usize]);
         }
     }
+    */
     pub fn write_tx_type_lv_map(&mut self, tx_size: TxSize, tx_type: TxType, 
                                 y_mode: PredictionMode, is_inter: bool) {
         let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
@@ -1504,6 +1509,7 @@ impl ContextWriter {
         self.w.symbol(0, cdf, HEAD_TOKENS + 1);
         self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, false);
     }
+/*
     pub fn write_coeffs(&mut self, plane: usize, bo: &BlockOffset,
                         coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType,
                         xdec: usize, ydec: usize) {
@@ -1613,7 +1619,7 @@ impl ContextWriter {
         }
         self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, true);
     }
-
+*/
     pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
       (TXSIZE_SQR_MAP[tx_size as usize] as usize + TXSIZE_SQR_MAP[tx_size as usize] as usize + 1) >> 1
     }
