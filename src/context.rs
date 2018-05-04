@@ -1850,23 +1850,14 @@ impl ContextWriter {
             self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, false);
             return;
         }
-/*
-        let plane_type = if plane > 0 { 1 } else { 0 };
-        let tx_size_ctx = TXSIZE_SQR_MAP[tx_size as usize] as usize;
-        let ref_type = 0;
-        let neighbors = scan_order.neighbors;
-        let mut token_cache = [0 as u8; 64*64];
-*/
-        let mut levels_buf = [0 as u8; TX_PAD_2D];
-        //let mut levels = &mut levels_buf[TX_PAD_TOP * ( tx_size.width() + TX_PAD_HOR)..];
 
-       // self.txb_init_levels(coeffs_in, tx_size.width(), tx_size.height(), &mut levels);
+        let mut levels_buf = [0 as u8; TX_PAD_2D];
+
         self.txb_init_levels(coeffs_in, tx_size.width(), tx_size.height(), &mut levels_buf);
 
         let pred_mode = self.bc.get_mode(bo);
         let is_inter = pred_mode >= PredictionMode::NEARESTMV;
 
-        //let tx_type = self.get_tx_type(tx_size, is_inter, false);
         let tx_class = tx_type_to_class[tx_type as usize];
         let plane_type = if plane == 0 { 0 as usize} else { 1 as usize };
 
@@ -1936,21 +1927,6 @@ impl ContextWriter {
                                  &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize],
                                  4);
             }
-            /*if level > NUM_BASE_LEVELS as u32 {
-                let base_range = level - 1 - NUM_BASE_LEVELS as u32;
-                let br_ctx = self.get_br_ctx(levels, pos as usize, bwl, tx_class);
-                let mut idx = 0;
-
-                loop {
-                  if idx >= COEFF_BASE_RANGE { break; }
-                  let k = cmp::min(base_range - idx as u32, BR_CDF_SIZE as u32 - 1);
-                  self.w.symbol(k as u32, &mut self.fc.coeff_br_cdf[
-                          cmp::min(txs_ctx, TxSize::TX_32X32 as usize)]
-                          [plane_type][br_ctx], BR_CDF_SIZE);
-                  if k < BR_CDF_SIZE as u32 - 1 { break; }
-                  idx += BR_CDF_SIZE - 1;
-                }
-            }*/
         }
 
         let update_eob = (eob - 1) as i16;
@@ -1960,7 +1936,6 @@ impl ContextWriter {
         for c in 0..eob {
             let v = coeffs_in[scan[c] as usize];
             let level = v.abs() as u32;
-            //let sign = if v < 0 { 1 } else { 0 };
             let sign = (v < 0) as u32;
 
             if level == 0 { continue; }
@@ -1972,37 +1947,7 @@ impl ContextWriter {
                 self.w.bit(sign);
             }
         }
-/*
-        if (update_eob >= 0) { 
-          for (c = update_eob; c >= 0; --c) {
-            const int pos = scan[c];
-            const tran_low_t level = abs(tcoeff[pos]);
-            int idx; 
-            int ctx; 
-      
-            if (level <= NUM_BASE_LEVELS) continue;
-      
-            // level is above 1.
-            const int base_range = level - 1 - NUM_BASE_LEVELS;
-      
-            ctx = get_br_ctx(levels, pos, bwl, level_counts[pos], tx_type);
-      
-            for (idx = 0; idx < COEFF_BASE_RANGE; idx += BR_CDF_SIZE - 1) { 
-              const int k = AOMMIN(base_range - idx, BR_CDF_SIZE - 1);
-              aom_write_symbol(w, k,
-                               ec_ctx->coeff_br_cdf[AOMMIN(txs_ctx, TX_32X32)]
-                                                   [plane_type][ctx],
-                               BR_CDF_SIZE);
-              if (k < BR_CDF_SIZE - 1) break;
-            }
-            if (base_range < COEFF_BASE_RANGE) continue;
-            // use 0-th order Golomb code to handle the residual level.
-            write_golomb(w,
-                         abs(tcoeff[pos]) - COEFF_BASE_RANGE - 1 - NUM_BASE_LEVELS);
-          }
-        }
 
-*/
         if update_eob >= 0 {
             for c in (0..update_eob+1).rev() {
                 let pos = scan[c as usize];
