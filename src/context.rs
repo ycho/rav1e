@@ -1936,7 +1936,7 @@ impl ContextWriter {
                                  &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize],
                                  4);
             }
-            if level > NUM_BASE_LEVELS as u32 {
+            /*if level > NUM_BASE_LEVELS as u32 {
                 let base_range = level - 1 - NUM_BASE_LEVELS as u32;
                 let br_ctx = self.get_br_ctx(levels, pos as usize, bwl, tx_class);
                 let mut idx = 0;
@@ -1950,8 +1950,10 @@ impl ContextWriter {
                   if k < BR_CDF_SIZE as u32 - 1 { break; }
                   idx += BR_CDF_SIZE - 1;
                 }
-            }
+            }*/
         }
+
+        let update_eob = (eob - 1) as i16;
 
         // Loop to code all signs in the transform block,
         // starting with the sign of DC (if applicable)
@@ -1960,18 +1962,73 @@ impl ContextWriter {
             let level = v.abs() as u32;
             //let sign = if v < 0 { 1 } else { 0 };
             let sign = (v < 0) as u32;
-            if level != 0 {
-                if c == 0 {
-                    self.w.symbol(sign, &mut self.fc.dc_sign_cdf[plane_type]
-                                  [txb_ctx.dc_sign_ctx], 2);
-                } else {
-                    self.w.bit(sign);
+
+            if level == 0 { continue; }
+
+            if c == 0 {
+                self.w.symbol(sign, &mut self.fc.dc_sign_cdf[plane_type]
+                              [txb_ctx.dc_sign_ctx], 2);
+            } else {
+                self.w.bit(sign);
+            }
+        }
+/*
+        if (update_eob >= 0) { 
+          for (c = update_eob; c >= 0; --c) {
+            const int pos = scan[c];
+            const tran_low_t level = abs(tcoeff[pos]);
+            int idx; 
+            int ctx; 
+      
+            if (level <= NUM_BASE_LEVELS) continue;
+      
+            // level is above 1.
+            const int base_range = level - 1 - NUM_BASE_LEVELS;
+      
+            ctx = get_br_ctx(levels, pos, bwl, level_counts[pos], tx_type);
+      
+            for (idx = 0; idx < COEFF_BASE_RANGE; idx += BR_CDF_SIZE - 1) { 
+              const int k = AOMMIN(base_range - idx, BR_CDF_SIZE - 1);
+              aom_write_symbol(w, k,
+                               ec_ctx->coeff_br_cdf[AOMMIN(txs_ctx, TX_32X32)]
+                                                   [plane_type][ctx],
+                               BR_CDF_SIZE);
+              if (k < BR_CDF_SIZE - 1) break;
+            }
+            if (base_range < COEFF_BASE_RANGE) continue;
+            // use 0-th order Golomb code to handle the residual level.
+            write_golomb(w,
+                         abs(tcoeff[pos]) - COEFF_BASE_RANGE - 1 - NUM_BASE_LEVELS);
+          }
+        }
+
+*/
+        if update_eob >= 0 {
+            for c in (0..update_eob+1).rev() {
+                let pos = scan[c as usize];
+                let v = coeffs_in[pos as usize];
+                let level = v.abs() as u32;
+
+                if level <= NUM_BASE_LEVELS as u32 { continue; }
+
+                let base_range = level - 1 - NUM_BASE_LEVELS as u32;
+                let br_ctx = self.get_br_ctx(levels, pos as usize, bwl, tx_class);
+                let mut idx = 0;
+
+                loop {
+                  if idx >= COEFF_BASE_RANGE { break; }
+                  let k = cmp::min(base_range - idx as u32, BR_CDF_SIZE as u32 - 1);
+                  self.w.symbol(k as u32, &mut self.fc.coeff_br_cdf[
+                          cmp::min(txs_ctx, TxSize::TX_32X32 as usize)]
+                          [plane_type][br_ctx], BR_CDF_SIZE);
+                  if k < BR_CDF_SIZE as u32 - 1 { break; }
+                  idx += BR_CDF_SIZE - 1;
                 }
-                if level > (COEFF_BASE_RANGE + NUM_BASE_LEVELS) as u32 {
-                    let pos = scan[c];
-                    self.w.write_golomb(coeffs_in[pos as usize].abs() as u32 -
-                        (COEFF_BASE_RANGE - 1 - NUM_BASE_LEVELS) as u32);
-                }
+
+                if base_range < COEFF_BASE_RANGE as u32 { continue; }
+                // use 0-th order Golomb code to handle the residual level.
+                self.w.write_golomb(level -
+                    (COEFF_BASE_RANGE - 1 - NUM_BASE_LEVELS) as u32);
             }
         }
 
