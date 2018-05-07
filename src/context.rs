@@ -750,6 +750,14 @@ static nz_map_ctx_offset_1d: [usize; 32] = [
   NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10,
   NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10, NZ_MAP_CTX_10,
   NZ_MAP_CTX_10, NZ_MAP_CTX_10 ];
+
+const CONTEXT_MAG_POSITION_NUM: usize = 3;
+
+static mag_ref_offset_with_txclass: [[[usize; 2]; CONTEXT_MAG_POSITION_NUM]; 3] = [
+  [ [ 0, 1 ], [ 1, 0 ], [ 1, 1 ] ],
+  [ [ 0, 1 ], [ 1, 0 ], [ 0, 2 ] ],
+  [ [ 0, 1 ], [ 1, 0 ], [ 2, 0 ] ] ];
+
 // End of Level Map
 
 pub fn clamp(val: i32, min: i32, max: i32) -> i32 {
@@ -1781,7 +1789,7 @@ impl ContextWriter {
                                i == eob - 1, tx_size, tx_class) as i8;
         }
     }
-
+/*	// TODO: Use this May 4 version, once libaom has updated onto it.
     pub fn get_br_ctx(&mut self, levels: &[u8], c: usize,  // raster order
                       bwl: usize, tx_class: TxClass) -> usize {
         let row: usize = c >> bwl;
@@ -1811,6 +1819,48 @@ impl ContextWriter {
               if c == 0 { return mag }
               if row == 0 { return mag + 7 }
             }
+        }
+
+        return mag + 14
+    }
+*/
+    pub fn get_level_mag_with_txclass(&mut self, levels: &[u8], stride: usize,
+                                      row: usize, col: usize, mag: &mut [usize],
+                                      tx_class: TxClass) {
+      for idx in 0..CONTEXT_MAG_POSITION_NUM {
+          let ref_row = row + mag_ref_offset_with_txclass[tx_class as usize][idx][0];
+          let ref_col = col + mag_ref_offset_with_txclass[tx_class as usize][idx][1];
+          let pos = ref_row * stride + ref_col;
+          mag[idx] = levels[pos] as usize;
+      }
+    }
+
+    pub fn get_br_ctx(&mut self, levels: &[u8], c: usize,  // raster order
+                      bwl: usize, tx_type: TxType) -> usize {
+        let row: usize = c >> bwl;
+        let col: usize = c - (row << bwl);
+        let stride: usize = (1 << bwl) + TX_PAD_HOR;
+        let mut nb_mag: [usize; 3] = [ 0, 0, 0 ];
+        let tx_class = tx_type_to_class[tx_type as usize];
+
+        self.get_level_mag_with_txclass(levels, stride, row, col, &mut nb_mag, tx_class);
+
+        let mut mag = cmp::min(nb_mag[0], COEFF_BASE_RANGE + NUM_BASE_LEVELS + 1) +
+              cmp::min(nb_mag[1], COEFF_BASE_RANGE + NUM_BASE_LEVELS + 1) +
+              cmp::min(nb_mag[2], COEFF_BASE_RANGE + NUM_BASE_LEVELS + 1);
+        mag = cmp::min((mag + 1) >> 1, 6);
+
+        if c == 0 { return mag };
+        if tx_class as usize == 0 {
+          if (row < 2) && (col < 2) { return mag + 7 };
+        } else {
+          if tx_class as usize  == 1 {
+            if col == 0 { return mag + 7 };
+          } else {
+            if tx_class as usize  == 2 {
+              if row == 0 { return mag + 7 };
+            }
+          }
         }
 
         return mag + 14
@@ -1957,7 +2007,7 @@ impl ContextWriter {
                 if level <= NUM_BASE_LEVELS as u32 { continue; }
 
                 let base_range = level - 1 - NUM_BASE_LEVELS as u32;
-                let br_ctx = self.get_br_ctx(levels, pos as usize, bwl, tx_class);
+                let br_ctx = self.get_br_ctx(levels, pos as usize, bwl, tx_type);
                 let mut idx = 0;
 
                 loop {
