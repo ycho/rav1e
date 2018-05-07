@@ -68,19 +68,21 @@ pub static block_size_high: [u8; BLOCK_SIZES_ALL] =
     [4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 64, 32, 64, 16,4, 32, 8, 64, 16 ];
 
 const EXT_TX_SIZES: usize = 4;
-const EXT_TX_SET_TYPES: usize = 6;
+const EXT_TX_SET_TYPES: usize = 9;
 const EXT_TX_SETS_INTRA: usize = 6;
 const EXT_TX_SETS_INTER: usize = 4;
 // Number of transform types in each set type
-static num_ext_tx_set: [usize; EXT_TX_SET_TYPES] = [1, 2, 5, 7, 12, 16];
+static num_ext_tx_set: [usize; EXT_TX_SET_TYPES] = [ 1, 2, 5, 7, 7, 10, 12, 16, 16];
 static av1_ext_tx_used: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
-  [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
-  [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 ],
-  [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 ],
-  [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0 ],
-  [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0 ],
-  [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
-];
+    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 ],
+    [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 ],
+    [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0 ],
+    [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0 ],
+    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0 ],
+    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0 ],
+    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ] ];
 // Maps intra set index to the set type
 /*static ext_tx_set_type_intra: [TxSetType; EXT_TX_SETS_INTRA] = [
     TxSetType::EXT_TX_SET_DCTONLY,
@@ -96,9 +98,9 @@ static ext_tx_set_type_inter: [TxSetType; EXT_TX_SETS_INTER] = [
     TxSetType::EXT_TX_SET_DCT_IDTX
 ];
 // Maps set types above to the indices used for intra
-static ext_tx_set_index_intra: [i8; EXT_TX_SET_TYPES] = [0, -1, 2, 1, -1, -1 ];
+static ext_tx_set_index_intra: [i8; EXT_TX_SET_TYPES] = [0, -1, 2, -1, 1, -1, -1, -1, -1];
 // Maps set types above to the indices used for inter
-static ext_tx_set_index_inter: [i8; EXT_TX_SET_TYPES] = [0, 3, -1, -1, 2, 1];
+static ext_tx_set_index_inter: [i8; EXT_TX_SET_TYPES] = [0, 3, -1, -1, -1, -1, 2, -1, 1];
 static av1_ext_tx_intra_ind: [[u32; TX_TYPES]; EXT_TX_SETS_INTRA] =
     [
       [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
@@ -1638,7 +1640,11 @@ impl ContextWriter {
         let mut offset = TX_PAD_TOP * (width + TX_PAD_HOR);
 
         for i in 0..TX_PAD_TOP * stride { levels_buf[i] = 0; }
-        for i in 0..height * stride { levels_buf[offset + i] = 0; }
+
+        let bottom_offset = offset + height * stride;
+        for i in 0..TX_PAD_BOTTOM * stride + TX_PAD_END {
+            levels_buf[bottom_offset + i] = 0;
+        }
 
         for y in 0..height {
             for x in 0..width {
