@@ -442,7 +442,13 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         _ => TxSize::TX_32X32
     };
 
+    // Cat-based coefficient coding
     //if skip == false { cw.write_tx_type(tx_size, tx_type, mode); }
+
+    // TODO: Disable below, if TXK_SEL is enabled.
+    if skip == false {
+        cw.write_tx_type_lv_map(tx_size, tx_type, mode, is_inter);
+    }
 
     let bw = mi_size_wide[bsize as usize] as usize / tx_size.width_mi();
     let bh = mi_size_high[bsize as usize] as usize / tx_size.height_mi();

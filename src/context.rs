@@ -1906,10 +1906,11 @@ impl ContextWriter {
         let tx_class = tx_type_to_class[tx_type as usize];
         let plane_type = if plane == 0 { 0 as usize} else { 1 as usize };
 
+        // TODO: Enable this, if TXK_SEL is enabled back.
         // Only y plane's tx_type is transmitted
-        if plane == 0 {
+        /*if plane == 0 {
             self.write_tx_type_lv_map(tx_size, tx_type, pred_mode, is_inter);
-        }
+        }*/
 
         // Encode EOB
         let mut eob_extra = 0 as u32;
