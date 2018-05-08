@@ -1474,12 +1474,12 @@ impl ContextWriter {
     pub fn write_tx_type_lv_map(&mut self, tx_size: TxSize, tx_type: TxType, 
                                 y_mode: PredictionMode, is_inter: bool) {
         let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
-
-        let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, false);
+        let use_reduced_tx_set = true;
+        let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, use_reduced_tx_set);
         let num_tx_types = num_ext_tx_set[tx_set_type as usize];
 
         if num_tx_types > 1 {
-          let eset = get_ext_tx_set(tx_size, is_inter, false);
+          let eset = get_ext_tx_set(tx_size, is_inter, use_reduced_tx_set);
           assert!(eset > 0);
           assert!(av1_ext_tx_used[tx_set_type as usize][tx_type as usize] != 0);
 
