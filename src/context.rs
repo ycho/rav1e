@@ -1636,25 +1636,14 @@ impl ContextWriter {
 
     pub fn txb_init_levels(&mut self, coeffs: &[i32], width: usize, height: usize, 
                                 levels_buf: &mut [u8]) {
-        let stride = width + TX_PAD_HOR;
         let mut offset = TX_PAD_TOP * (width + TX_PAD_HOR);
-
-        for i in 0..TX_PAD_TOP * stride { levels_buf[i] = 0; }
-
-        let bottom_offset = offset + height * stride;
-        for i in 0..TX_PAD_BOTTOM * stride + TX_PAD_END {
-            levels_buf[bottom_offset + i] = 0;
-        }
 
         for y in 0..height {
             for x in 0..width {
                 levels_buf[offset] = clamp(coeffs[y*width + x], 0, 127) as u8;
                 offset += 1;
             }
-            for x in 0..TX_PAD_HOR {
-                levels_buf[offset] = 0;
-                offset += 1;
-            }
+            offset += TX_PAD_HOR;
         }
     }
 
