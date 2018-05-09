@@ -99,6 +99,7 @@ pub struct FrameInvariants {
     pub number: u64,
     pub ftype: FrameType,
     pub show_existing_frame: bool,
+    pub use_reduced_tx_set: bool,
     pub min_partition_size: BlockSize,
 }
 
@@ -125,6 +126,7 @@ impl FrameInvariants {
             number: 0,
             ftype: FrameType::KEY,
             show_existing_frame: false,
+            use_reduced_tx_set: true,
             min_partition_size: min_partition_size,
         }
     }
@@ -319,7 +321,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write(1,0)?; // no 64x64 transforms
     //uch.write_bit(false)?; // use hybrid pred
     //uch.write_bit(false)?; // use compound pred
-    uch.write_bit(true)?; // reduced tx
+    uch.write_bit(fi.use_reduced_tx_set)?; // reduced tx
     uch.write_bit(true)?; // uniform tile spacing
     if fi.width > 64 {
         uch.write(1,0)?; // tile cols
@@ -386,7 +388,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     for i in 0..tx_size.width()*tx_size.height() {
         if i <= 5 {
             // TODO: Test negative here
-            coeffs[i] = 4;
+            coeffs[i] = 2;
             if i == 0 { coeffs[i] = -4; };
         } else {
             coeffs[i] = 0;
@@ -457,7 +459,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
 
     // TODO: Disable below, if TXK_SEL is enabled.
     if skip == false {
-        cw.write_tx_type_lv_map(tx_size, tx_type, mode, is_inter);
+        cw.write_tx_type_lv_map(tx_size, tx_type, mode, is_inter, fi.use_reduced_tx_set);
     }
 
     let bw = mi_size_wide[bsize as usize] as usize / tx_size.width_mi();
