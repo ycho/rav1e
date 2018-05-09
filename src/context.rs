@@ -1174,16 +1174,16 @@ impl BlockContext {
          + self.left_coeff_context[plane][bo.y_in_sb()]) as usize
     }
 
-    fn set_coeff_context(&mut self, plane: usize, bo: &BlockOffset, tx_size: TxSize, xdec: usize, ydec: usize, value: bool) {
-        let uvalue = value as u8;
+    fn set_coeff_context(&mut self, plane: usize, bo: &BlockOffset, tx_size: TxSize,
+                         xdec: usize, ydec: usize, value: u8) {
         // for subsampled planes, coeff contexts are stored sparsely at the moment
         // so we need to scale our fill by xdec and ydec
         for bx in 0..tx_size.width_mi() {
-            self.above_coeff_context[plane][bo.x + (bx<<xdec)] = uvalue;
+            self.above_coeff_context[plane][bo.x + (bx<<xdec)] = value;
         }
         let bo_y = bo.y_in_sb();
         for by in 0..tx_size.height_mi() {
-            self.left_coeff_context[plane][bo_y + (by<<ydec)] = uvalue;
+            self.left_coeff_context[plane][bo_y + (by<<ydec)] = value;
         }
     }
 
@@ -1520,6 +1520,7 @@ impl ContextWriter {
         let ctx = self.bc.intra_inter_context(bo);
         self.w.symbol(is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx], 2);
     }
+/*
     pub fn write_token_block_zero(&mut self, plane: usize, bo: &BlockOffset, tx_size: TxSize,
                                   xdec: usize, ydec: usize) {
         let plane_type = if plane > 0 { 1 } else { 0 };
@@ -1532,7 +1533,7 @@ impl ContextWriter {
         self.w.symbol(0, cdf, HEAD_TOKENS + 1);
         self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, false);
     }
-/*
+
     pub fn write_coeffs(&mut self, plane: usize, bo: &BlockOffset,
                         coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType,
                         xdec: usize, ydec: usize) {
@@ -1881,15 +1882,21 @@ impl ContextWriter {
         let scan = scan_order.scan;
         let mut coeffs_storage = [0 as i32; 64*64];
         let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
+        let mut cul_level = 0 as u32;
 
         for i in 0..tx_size.width()*tx_size.height() {
             coeffs[i] = coeffs_in[scan[i] as usize];
+            cul_level += coeffs[i].abs() as u32;
         }
+
         let mut eob = 0;
-        for (i, v) in coeffs.iter().enumerate() {
-            if *v != 0 {
-                eob = i + 1;
-            }
+
+        if cul_level != 0 {
+          for (i, v) in coeffs.iter().enumerate() {
+              if *v != 0 {
+                  eob = i + 1;
+              }
+          }
         }
 
         if plane == 0 && eob == 0 {
@@ -1905,7 +1912,7 @@ impl ContextWriter {
         }
 
         if eob == 0 {
-            self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, false);
+            self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, 0);
             return;
         }
 
@@ -2036,7 +2043,9 @@ impl ContextWriter {
             }
         }
 
-        self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, true);
+        cul_level = cmp::min(COEFF_CONTEXT_MASK as u32, cul_level);
+
+        self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8);
     }
 
     pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
