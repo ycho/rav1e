@@ -1973,8 +1973,8 @@ impl ContextWriter {
                              2);
             for i in 1..eob_offset_bits {
               eob_shift = eob_offset_bits as u16 - 1 - i as u16;
-              bit = if (eob_extra & (1 << eob_shift)) != 0 { 1 as u32 } else { 0 as u32};
-              self.w.bit(bit);
+              bit = if (eob_extra & (1 << eob_shift)) != 0 { 1 } else { 0 };
+              self.w.bit(bit as u16);
             }
         }
 
@@ -2010,7 +2010,8 @@ impl ContextWriter {
         for c in 0..eob {
             let v = coeffs_in[scan[c] as usize];
             let level = v.abs() as u32;
-            let sign = (v < 0) as u32;
+            //let sign = (v < 0) as u32;
+            let sign = if v < 0 { 1 } else { 0 };
 
             if level == 0 { continue; }
 
@@ -2018,7 +2019,7 @@ impl ContextWriter {
                 self.w.symbol(sign, &mut self.fc.dc_sign_cdf[plane_type]
                               [txb_ctx.dc_sign_ctx], 2);
             } else {
-                self.w.bit(sign);
+                self.w.bit(sign as u16);
             }
         }
 
@@ -2026,28 +2027,28 @@ impl ContextWriter {
             for c in (0..update_eob+1).rev() {
                 let pos = scan[c as usize];
                 let v = coeffs_in[pos as usize];
-                let level = v.abs() as u32;
+                let level = v.abs() as u16;
 
-                if level <= NUM_BASE_LEVELS as u32 { continue; }
+                if level <= NUM_BASE_LEVELS as u16 { continue; }
 
-                let base_range = level - 1 - NUM_BASE_LEVELS as u32;
+                let base_range = level - 1 - NUM_BASE_LEVELS as u16;
                 let br_ctx = self.get_br_ctx(levels, pos as usize, bwl, tx_type);
                 let mut idx = 0;
 
                 loop {
                   if idx >= COEFF_BASE_RANGE { break; }
-                  let k = cmp::min(base_range - idx as u32, BR_CDF_SIZE as u32 - 1);
+                  let k = cmp::min(base_range - idx as u16, BR_CDF_SIZE as u16 - 1);
                   self.w.symbol(k as u32, &mut self.fc.coeff_br_cdf[
                           cmp::min(txs_ctx, TxSize::TX_32X32 as usize)]
                           [plane_type][br_ctx], BR_CDF_SIZE);
-                  if k < BR_CDF_SIZE as u32 - 1 { break; }
+                  if k < BR_CDF_SIZE as u16 - 1 { break; }
                   idx += BR_CDF_SIZE - 1;
                 }
 
-                if base_range < COEFF_BASE_RANGE as u32 { continue; }
+                if base_range < COEFF_BASE_RANGE as u16 { continue; }
                 // use 0-th order Golomb code to handle the residual level.
                 self.w.write_golomb(level -
-                    (COEFF_BASE_RANGE - 1 - NUM_BASE_LEVELS) as u32);
+                    COEFF_BASE_RANGE as u16 - 1 - NUM_BASE_LEVELS as u16);
             }
         }
 

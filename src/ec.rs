@@ -277,12 +277,12 @@ impl Writer {
         self.cdf(s, &cdf[..nsymbs]);
         Writer::update_cdf(cdf, s, nsymbs);
     }
-    pub fn bit(&mut self, bit: u32) {
+    pub fn bit(&mut self, bit: u16) {
         let p = ((0x7FFFFF - (128 << 15) + 128) >> 8) as u16;
         self.enc.od_ec_encode_bool_q15(bit == 1, p);
     }
 
-    pub fn write_golomb(&mut self, level: u32) {
+    pub fn write_golomb(&mut self, level: u16) {
         let x = level + 1;
         let mut i = x;
         let mut length = 0;
