@@ -1718,7 +1718,7 @@ impl ContextWriter {
 
     pub fn get_nz_mag(&mut self, levels: &[u8],
                       bwl: usize, tx_class: TxClass) -> usize {
-
+      // May version.
       // Note: AOMMIN(level, 3) is useless for decoder since level < 3.
       let mut mag = clip_max3[levels[1] as usize];                 // { 0, 1 }
       mag += clip_max3[levels[(1 << bwl) + TX_PAD_HOR] as usize];  // { 1, 0 }
@@ -1737,7 +1737,42 @@ impl ContextWriter {
         mag += clip_max3[levels[4] as usize];  // { 0, 4 }
       }
 
-      mag as usize
+/*      // Jan 22 version.
+        const SIG_REF_DIFF_OFFSET_NUM: usize = 3;
+
+        static sig_ref_diff_offset: [[usize; 2]; SIG_REF_DIFF_OFFSET_NUM] = [
+          [ 1, 1 ], [ 0, 2 ], [ 2, 0 ] ];
+
+        static sig_ref_diff_offset_vert: [[usize; 2]; SIG_REF_DIFF_OFFSET_NUM] = [
+          [ 2, 0 ], [ 3, 0 ], [ 4, 0 ] ];
+
+        static sig_ref_diff_offset_horiz: [[usize; 2]; SIG_REF_DIFF_OFFSET_NUM] = [
+          [ 0, 2 ], [ 0, 3 ], [ 0, 4 ] ];
+
+
+        // Note: AOMMIN(level, 3) is useless for decoder since level < 3.
+        let mut mag = cmp::min(levels[1], 3);                         // { 0, 1 }
+        mag += cmp::min(levels[(1 << bwl) + TX_PAD_HOR], 3);  // { 1, 0 }
+
+        for idx in 0..SIG_REF_DIFF_OFFSET_NUM {
+            let row_offset =
+                if tx_class == TX_CLASS_2D { sig_ref_diff_offset[idx][0] }
+                else if tx_class == TX_CLASS_VERT {
+                         sig_ref_diff_offset_vert[idx][0] }
+                     else { sig_ref_diff_offset_horiz[idx][0] };
+
+            let col_offset =
+                if tx_class == TX_CLASS_2D { sig_ref_diff_offset[idx][1] }
+                else if tx_class == TX_CLASS_VERT {
+                         sig_ref_diff_offset_vert[idx][1] }
+                     else { sig_ref_diff_offset_horiz[idx][1] };
+
+            let nb_pos =
+                (row_offset << bwl) + (row_offset << TX_PAD_HOR_LOG2) + col_offset;
+            mag += cmp::min(levels[nb_pos], 3);
+        }
+*/
+        mag as usize
     }
 
     pub fn get_nz_map_ctx_from_stats(&mut self, stats: usize,
