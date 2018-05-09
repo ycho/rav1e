@@ -1174,6 +1174,14 @@ impl BlockContext {
          + self.left_coeff_context[plane][bo.y_in_sb()]) as usize
     }
 
+    pub fn set_dc_sign(&mut self, cul_level: &mut u32, dc_val: i32) {
+      if dc_val < 0 {
+        *cul_level |= 1 << COEFF_CONTEXT_BITS;
+      } else if dc_val > 0 {
+        *cul_level += 2 << COEFF_CONTEXT_BITS;
+      }
+    }
+
     fn set_coeff_context(&mut self, plane: usize, bo: &BlockOffset, tx_size: TxSize,
                          xdec: usize, ydec: usize, value: u8) {
         // for subsampled planes, coeff contexts are stored sparsely at the moment
@@ -2044,6 +2052,8 @@ impl ContextWriter {
         }
 
         cul_level = cmp::min(COEFF_CONTEXT_MASK as u32, cul_level);
+        
+        self.bc.set_dc_sign(&mut cul_level, coeffs[0]);
 
         self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8);
     }
