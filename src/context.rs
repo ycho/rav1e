@@ -886,22 +886,6 @@ extern {
     static default_skip_cdfs: [[u16; 3];SKIP_CONTEXTS];
     static default_intra_inter_cdf: [[u16; 3];INTRA_INTER_CONTEXTS];
     static default_angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
-    static av1_default_coef_head_cdfs_q0: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
-    static av1_default_coef_head_cdfs_q1: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
-    static av1_default_coef_head_cdfs_q2: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
-    static av1_default_coef_head_cdfs_q3: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
-
-    static av1_cat1_cdf0: [u16; 2];
-    static av1_cat2_cdf0: [u16; 4];
-    static av1_cat3_cdf0: [u16; 8];
-    static av1_cat4_cdf0: [u16; 16];
-    static av1_cat5_cdf0: [u16; 16];
-    static av1_cat5_cdf1: [u16; 2];
-    static av1_cat6_cdf0: [u16; 16];
-    static av1_cat6_cdf1: [u16; 16];
-    static av1_cat6_cdf2: [u16; 16];
-    static av1_cat6_cdf3: [u16; 16];
-    static av1_cat6_cdf4: [u16; 4];
 
     static av1_intra_scan_orders: [[SCAN_ORDER; TX_TYPES]; TX_SIZES_ALL];
 
@@ -948,8 +932,6 @@ pub struct CDFContext {
     y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS],
     uv_mode_cdf: [[u16; INTRA_MODES + 1]; INTRA_MODES],
     intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
-    coef_head_cdfs: [[CoeffModel; PLANE_TYPES]; TX_SIZES],
-    coef_tail_cdfs: [[CoeffModel; PLANE_TYPES]; TX_SIZES],
     skip_cdfs: [[u16; 3];SKIP_CONTEXTS],
     intra_inter_cdfs: [[u16; 3];INTRA_INTER_CONTEXTS],
     angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
@@ -977,7 +959,7 @@ pub struct CDFContext {
 
 impl CDFContext {
     pub fn new(qindex: u8) -> CDFContext {
-        let mut c = CDFContext {
+        let c = CDFContext {
             partition_cdf: default_partition_cdf,
             kf_y_cdf: default_kf_y_mode_cdf,
             y_mode_cdf: default_if_y_mode_cdf,
@@ -986,13 +968,7 @@ impl CDFContext {
             skip_cdfs: default_skip_cdfs,
             intra_inter_cdfs: default_intra_inter_cdf,
             angle_delta_cdf: default_angle_delta_cdf,
-            coef_head_cdfs: match qindex {
-                0...63 => av1_default_coef_head_cdfs_q0,
-                64...127 => av1_default_coef_head_cdfs_q1,
-                128...191 => av1_default_coef_head_cdfs_q2,
-                _ => av1_default_coef_head_cdfs_q3,
-            },
-            coef_tail_cdfs: Default::default(),
+
             // lv_map
             txb_skip_cdf: default_txb_skip_cdf,
             dc_sign_cdf: default_dc_sign_cdf,
@@ -1011,21 +987,6 @@ impl CDFContext {
             coeff_br_cdf: default_coeff_lps_multi
 
         };
-        for t in 0..TX_SIZES {
-            for i in 0..PLANE_TYPES {
-                for j in 0..REF_TYPES {
-                    for k in 0..COEF_BANDS {
-                        let coeff_contexts = if k == 0 { 3 } else { 6 };
-                        for l in 0..coeff_contexts {
-                            unsafe {
-                                build_tail_cdfs(&mut c.coef_tail_cdfs[t][i][j][k][l],
-                                                &mut c.coef_head_cdfs[t][i][j][k][l], (k == 0) as i32);
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         c
     }
@@ -1479,19 +1440,7 @@ impl ContextWriter {
                      &mut self.fc.angle_delta_cdf[mode as usize - PredictionMode::V_PRED as usize],
                      2 * MAX_ANGLE_DELTA + 1);
     }
-/*
-    pub fn write_tx_type(&mut self, tx_size: TxSize, tx_type: TxType, y_mode: PredictionMode) {
-        let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
-        let eset =
-            get_ext_tx_set(tx_size, false, true);
-        if eset > 0 {
-            self.w.symbol(
-                av1_ext_tx_intra_ind[eset as usize][tx_type as usize],
-                &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][y_mode as usize],
-                ext_tx_cnt_intra[eset as usize]);
-        }
-    }
-    */
+
     pub fn write_tx_type_lv_map(&mut self, tx_size: TxSize, tx_type: TxType, 
                                 y_mode: PredictionMode, is_inter: bool,
                                 use_reduced_tx_set: bool) {
@@ -1528,130 +1477,7 @@ impl ContextWriter {
         let ctx = self.bc.intra_inter_context(bo);
         self.w.symbol(is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx], 2);
     }
-/*
-    pub fn write_token_block_zero(&mut self, plane: usize, bo: &BlockOffset, tx_size: TxSize,
-                                  xdec: usize, ydec: usize) {
-        let plane_type = if plane > 0 { 1 } else { 0 };
-        let tx_size_ctx = TXSIZE_SQR_MAP[tx_size as usize] as usize;
-        let ref_type = 0;
-        let band = 0;
-        let ctx = self.bc.coeff_context(plane, bo);
-        let cdf = &mut self.fc.coef_head_cdfs[tx_size_ctx][plane_type][ref_type][band][ctx];
-        //println!("encoding token band={} ctx={}", band, ctx);
-        self.w.symbol(0, cdf, HEAD_TOKENS + 1);
-        self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, false);
-    }
 
-    pub fn write_coeffs(&mut self, plane: usize, bo: &BlockOffset,
-                        coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType,
-                        xdec: usize, ydec: usize) {
-        let scan_order = &av1_intra_scan_orders[tx_size as usize][tx_type as usize];
-        let scan = scan_order.scan;
-        let mut coeffs_storage = [0 as i32; 64*64];
-        let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
-        for i in 0..tx_size.width()*tx_size.height() {
-            coeffs[i] = coeffs_in[scan[i] as usize];
-        }
-        let mut nz_coeff = 0;
-        for (i, v) in coeffs.iter().enumerate() {
-            if *v != 0 {
-                nz_coeff = i + 1;
-            }
-        }
-        if nz_coeff == 0 {
-            self.write_token_block_zero(plane, bo, tx_size, xdec, ydec);
-            return;
-        }
-        let plane_type = if plane > 0 { 1 } else { 0 };
-        let tx_size_ctx = TXSIZE_SQR_MAP[tx_size as usize] as usize;
-        let ref_type = 0;
-        let neighbors = scan_order.neighbors;
-        let mut token_cache = [0 as u8; 64*64];
-        for (i, v) in coeffs.iter().enumerate() {
-            let vabs = v.abs() as u32;
-            let first = i == 0;
-            let last = i == (nz_coeff - 1);
-            let band = match tx_size {
-                TxSize::TX_4X4 => av1_coefband_trans_4x4[i],
-                _ => av1_coefband_trans_8x8plus[i],
-            };
-            let ctx = if first {
-                self.bc.coeff_context(plane, bo)
-            } else {
-                ((1 + token_cache[neighbors[2 * i + 0] as usize]
-                  + token_cache[neighbors[2 * i + 1] as usize]) >> 1) as usize
-            };
-            let cdf = &mut self.fc.coef_head_cdfs[tx_size_ctx][plane_type][ref_type][band as usize][ctx];
-            match (vabs, last) {
-                (0,_) => {
-                    self.w.symbol(HeadToken::Zero as u32 - !first as u32, cdf, HEAD_TOKENS + (first as usize));
-                    continue
-                },
-                (1, false) => self.w.symbol(HeadToken::OneNEOB as u32 - !first as u32, cdf, HEAD_TOKENS + (first as usize)),
-                (1, true) => self.w.symbol(HeadToken::OneEOB as u32 - !first as u32, cdf, HEAD_TOKENS + (first as usize)),
-                (_, false) => self.w.symbol(HeadToken::TwoPlusNEOB as u32 - !first as u32, cdf, HEAD_TOKENS + (first as usize)),
-                (_, true) => self.w.symbol(HeadToken::TwoPlusEOB as u32 - !first as u32, cdf, HEAD_TOKENS + (first as usize)),
-            };
-            let tailcdf = &mut self.fc.coef_tail_cdfs[tx_size_ctx][plane_type][ref_type][band as usize][ctx as usize];
-            match vabs {
-                0|1 => {},
-                2 => self.w.symbol(TailToken::Two as u32, tailcdf, TAIL_TOKENS),
-                3 => self.w.symbol(TailToken::Three as u32, tailcdf, TAIL_TOKENS),
-                4 => self.w.symbol(TailToken::Four as u32, tailcdf, TAIL_TOKENS),
-                5...6 => {
-                    self.w.symbol(TailToken::Cat1 as u32, tailcdf, TAIL_TOKENS);
-                    self.w.cdf(vabs - 5, &av1_cat1_cdf0);
-                }
-                7...10 => {
-                    self.w.symbol(TailToken::Cat2 as u32, tailcdf, TAIL_TOKENS);
-                    self.w.cdf(vabs - 7, &av1_cat2_cdf0);
-                }
-                11...18 => {
-                    self.w.symbol(TailToken::Cat3 as u32, tailcdf, TAIL_TOKENS);
-                    self.w.cdf(vabs - 11, &av1_cat3_cdf0);
-                }
-                19...34 => {
-                    self.w.symbol(TailToken::Cat4 as u32, tailcdf, TAIL_TOKENS);
-                    self.w.cdf(vabs - 19, &av1_cat4_cdf0);
-                }
-                35...66 => {
-                    self.w.symbol(TailToken::Cat5 as u32, tailcdf, TAIL_TOKENS);
-                    self.w.cdf((vabs - 35) & 0xf, &av1_cat5_cdf0);
-                    self.w.cdf(((vabs - 35) >> 4) & 0x1, &av1_cat5_cdf1);
-                }
-                _ => {
-                    self.w.symbol(TailToken::Cat6 as u32, tailcdf, TAIL_TOKENS);
-                    let tx_offset = tx_size as u32 - TxSize::TX_4X4 as u32;
-                    let bit_depth = 8;
-                    let bits = bit_depth + 3 + tx_offset;
-                    self.w.cdf((vabs - 67) & 0xf, &av1_cat6_cdf0);
-                    self.w.cdf(((vabs - 67) >> 4) & 0xf, &av1_cat6_cdf1);
-                    self.w.cdf(((vabs - 67) >> 8) & 0xf, &av1_cat6_cdf2);
-                    if bits > 12 {
-                        self.w.cdf(((vabs - 67) >> 12) & 0xf, &av1_cat6_cdf3);
-                    }
-                    if bits > 16 {
-                        self.w.cdf(((vabs - 67) >> 16) & 0x3, &av1_cat6_cdf4);
-                    }
-                }
-            };
-            self.w.bool(*v < 0, 16384);
-            let energy_class = match vabs {
-                0 => 0,
-                1 => 1,
-                2 => 2,
-                3|4 => 3,
-                5...10 => 4,
-                _ => 5,
-            };
-            token_cache[scan[i] as usize] = energy_class;
-            if last {
-                break;
-            }
-        }
-        self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, true);
-    }
-*/
     pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
       (TXSIZE_SQR_MAP[tx_size as usize] as usize + TXSIZE_SQR_MAP[tx_size as usize] as usize + 1) >> 1
     }
@@ -1669,6 +1495,7 @@ impl ContextWriter {
         }
     }
 
+    // TODO: Figure out where this function is supposed to be used!?
     pub fn get_tx_type(&mut self, tx_size: TxSize, is_inter: bool,
                             use_reduced_set: bool) -> TxType {
         let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, use_reduced_set);
@@ -1718,60 +1545,25 @@ impl ContextWriter {
 
     pub fn get_nz_mag(&mut self, levels: &[u8],
                       bwl: usize, tx_class: TxClass) -> usize {
-      // May version.
-      // Note: AOMMIN(level, 3) is useless for decoder since level < 3.
-      let mut mag = clip_max3[levels[1] as usize];                 // { 0, 1 }
-      mag += clip_max3[levels[(1 << bwl) + TX_PAD_HOR] as usize];  // { 1, 0 }
-
-      if tx_class == TX_CLASS_2D {
-        mag += clip_max3[levels[(1 << bwl) + TX_PAD_HOR + 1] as usize];          // { 1, 1 }
-        mag += clip_max3[levels[2] as usize];                                    // { 0, 2 }
-        mag += clip_max3[levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)] as usize];  // { 2, 0 }
-      } else if tx_class == TX_CLASS_VERT {
-        mag += clip_max3[levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)] as usize];  // { 2, 0 }
-        mag += clip_max3[levels[(3 << bwl) + (3 << TX_PAD_HOR_LOG2)] as usize];  // { 3, 0 }
-        mag += clip_max3[levels[(4 << bwl) + (4 << TX_PAD_HOR_LOG2)] as usize];  // { 4, 0 }
-      } else {
-        mag += clip_max3[levels[2] as usize];  // { 0, 2 }
-        mag += clip_max3[levels[3] as usize];  // { 0, 3 }
-        mag += clip_max3[levels[4] as usize];  // { 0, 4 }
-      }
-
-/*      // Jan 22 version.
-        const SIG_REF_DIFF_OFFSET_NUM: usize = 3;
-
-        static sig_ref_diff_offset: [[usize; 2]; SIG_REF_DIFF_OFFSET_NUM] = [
-          [ 1, 1 ], [ 0, 2 ], [ 2, 0 ] ];
-
-        static sig_ref_diff_offset_vert: [[usize; 2]; SIG_REF_DIFF_OFFSET_NUM] = [
-          [ 2, 0 ], [ 3, 0 ], [ 4, 0 ] ];
-
-        static sig_ref_diff_offset_horiz: [[usize; 2]; SIG_REF_DIFF_OFFSET_NUM] = [
-          [ 0, 2 ], [ 0, 3 ], [ 0, 4 ] ];
-
-
+        // May version.
         // Note: AOMMIN(level, 3) is useless for decoder since level < 3.
-        let mut mag = cmp::min(levels[1], 3);                         // { 0, 1 }
-        mag += cmp::min(levels[(1 << bwl) + TX_PAD_HOR], 3);  // { 1, 0 }
+        let mut mag = clip_max3[levels[1] as usize];                 // { 0, 1 }
+        mag += clip_max3[levels[(1 << bwl) + TX_PAD_HOR] as usize];  // { 1, 0 }
 
-        for idx in 0..SIG_REF_DIFF_OFFSET_NUM {
-            let row_offset =
-                if tx_class == TX_CLASS_2D { sig_ref_diff_offset[idx][0] }
-                else if tx_class == TX_CLASS_VERT {
-                         sig_ref_diff_offset_vert[idx][0] }
-                     else { sig_ref_diff_offset_horiz[idx][0] };
-
-            let col_offset =
-                if tx_class == TX_CLASS_2D { sig_ref_diff_offset[idx][1] }
-                else if tx_class == TX_CLASS_VERT {
-                         sig_ref_diff_offset_vert[idx][1] }
-                     else { sig_ref_diff_offset_horiz[idx][1] };
-
-            let nb_pos =
-                (row_offset << bwl) + (row_offset << TX_PAD_HOR_LOG2) + col_offset;
-            mag += cmp::min(levels[nb_pos], 3);
+        if tx_class == TX_CLASS_2D {
+          mag += clip_max3[levels[(1 << bwl) + TX_PAD_HOR + 1] as usize];          // { 1, 1 }
+          mag += clip_max3[levels[2] as usize];                                    // { 0, 2 }
+          mag += clip_max3[levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)] as usize];  // { 2, 0 }
+        } else if tx_class == TX_CLASS_VERT {
+          mag += clip_max3[levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)] as usize];  // { 2, 0 }
+          mag += clip_max3[levels[(3 << bwl) + (3 << TX_PAD_HOR_LOG2)] as usize];  // { 3, 0 }
+          mag += clip_max3[levels[(4 << bwl) + (4 << TX_PAD_HOR_LOG2)] as usize];  // { 4, 0 }
+        } else {
+          mag += clip_max3[levels[2] as usize];  // { 0, 2 }
+          mag += clip_max3[levels[3] as usize];  // { 0, 3 }
+          mag += clip_max3[levels[4] as usize];  // { 0, 4 }
         }
-*/
+
         mag as usize
     }
 
@@ -1890,6 +1682,10 @@ impl ContextWriter {
     pub fn write_coeffs_lv_map(&mut self, plane: usize, bo: &BlockOffset,
                         coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType,
                         plane_bsize: BlockSize, xdec: usize, ydec: usize) {
+        let pred_mode = self.bc.get_mode(bo);
+        let is_inter = pred_mode >= PredictionMode::NEARESTMV;
+        assert!( is_inter == false );
+        // TODO: If iner mode, scan_order should use inter version of them
         let scan_order = &av1_intra_scan_orders[tx_size as usize][tx_type as usize];
         let scan = scan_order.scan;
         let mut coeffs_storage = [0 as i32; 64*64];
@@ -1932,9 +1728,6 @@ impl ContextWriter {
 
         self.txb_init_levels(coeffs_in, tx_size.width(), tx_size.height(),
                             &mut levels_buf);
-
-        let pred_mode = self.bc.get_mode(bo);
-        let is_inter = pred_mode >= PredictionMode::NEARESTMV;
 
         let tx_class = tx_type_to_class[tx_type as usize];
         let plane_type = if plane == 0 { 0 as usize} else { 1 as usize };

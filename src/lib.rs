@@ -434,9 +434,6 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         _ => TxSize::TX_32X32
     };
 
-    // Cat-based coefficient coding
-    //if skip == false { cw.write_tx_type(tx_size, tx_type, mode); }
-
     // TODO: Disable below, if TXK_SEL is enabled.
     if skip == false {
         cw.write_tx_type_lv_map(tx_size, tx_type, mode, is_inter, fi.use_reduced_tx_set);
@@ -580,15 +577,10 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
         PartitionType::PARTITION_NONE => {
             // TODO(anyone): Until we have RDO-based block size decision,
             // call rdo_mode_decision() for a partition.
-            //let rdo_none = rdo_mode_decision(fi, fs, cw, bsize, bo);
-            // FIXME(anyone): Instead of calling set_mode() in encode_block() for each 4x4tx position,
-            // it would be better to call set_mode() for each MI block position here.
-            //cw.bc.set_mode(bo, bsize, rdo_none.pred_mode);
+            let rdo_none = rdo_mode_decision(fi, fs, cw, bsize, bo);
+            cw.bc.set_mode(bo, bsize, rdo_none.pred_mode);
 
-            //encode_block(fi, fs, cw, rdo_none.pred_mode, bsize, bo);
-
-            cw.bc.set_mode(bo, bsize, PredictionMode::DC_PRED);
-            encode_block(fi, fs, cw, PredictionMode::DC_PRED, bsize, bo);
+            encode_block(fi, fs, cw, rdo_none.pred_mode, bsize, bo);
         },
         PartitionType::PARTITION_SPLIT => {
             assert!(subsize != BlockSize::BLOCK_INVALID);
