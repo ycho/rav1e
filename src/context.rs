@@ -1662,7 +1662,7 @@ impl ContextWriter {
 
         for y in 0..height {
             for x in 0..width {
-                levels_buf[offset] = clamp(coeffs[y*width + x], 0, 127) as u8;
+                levels_buf[offset] = clamp(coeffs[y*width + x].abs(), 0, 127) as u8;
                 offset += 1;
             }
             offset += TX_PAD_HOR;
@@ -1961,7 +1961,8 @@ impl ContextWriter {
 
         let mut levels_buf = [0 as u8; TX_PAD_2D];
 
-        self.txb_init_levels(coeffs_in, tx_size.width(), tx_size.height(), &mut levels_buf);
+        self.txb_init_levels(coeffs_in, tx_size.width(), tx_size.height(),
+                            &mut levels_buf);
 
         let pred_mode = self.bc.get_mode(bo);
         let is_inter = pred_mode >= PredictionMode::NEARESTMV;
@@ -2033,7 +2034,7 @@ impl ContextWriter {
                     txs_ctx][plane_type][coeff_ctx as usize], 3);
             } else {
                 self.w.symbol((cmp::min(level, 3)) as u32,
-                                 &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize],
+                    &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize],
                                  4);
             }
         }

@@ -382,27 +382,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
     forward_transform(&residual, coeffs, 1<<tx_size_wide_log2[tx_size as usize], tx_size, tx_type);
     quantize_in_place(fi.qindex, coeffs, tx_size);
-    //cw.write_coeffs(p, bo, &coeffs, tx_size, tx_type, xdec, ydec);
 
-    // FOR DEV TEST PURPOSE ONLY, until whole lv-map is implemented
-    for i in 0..tx_size.width()*tx_size.height() {
-        if i <= 5 {
-            // TODO: Test negative here
-            coeffs[i] = 2;
-            if i == 0 { coeffs[i] = -4; };
-        } else {
-            coeffs[i] = 0;
-        }
-        /*if i == 0 {
-            coeffs[i] = 9;
-        else if (i <= 15) && (i & 1 == 0) {
-            let mut sign = 1;
-            if i & 2 == 0 { sign = -1; };
-            coeffs[i] = 9 * sign;
-        } else {
-            coeffs[i] = 0;
-        }*/
-    }
     cw.write_coeffs_lv_map(p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec);
 
     //reconstruct
