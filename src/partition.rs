@@ -278,7 +278,7 @@ pub enum PredictionMode {
   PAETH_PRED,
   NEARESTMV,
   NEARMV,
-  ZEROMV,
+  GLOBALMV,
   NEWMV,
   // Compound ref compound modes
   NEAREST_NEARESTMV,
@@ -287,7 +287,7 @@ pub enum PredictionMode {
   NEW_NEARESTMV,
   NEAR_NEWMV,
   NEW_NEARMV,
-  ZERO_ZEROMV,
+  GLOBAL_GLOBALMV,
   NEW_NEWMV
 }
 

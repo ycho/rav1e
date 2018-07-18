@@ -383,31 +383,31 @@ pub enum ReferenceMode {
   SELECT = 2,
 }
 
+const REF_CONTEXTS: usize = 3;
+
 const REF_FRAMES: u32 = 8;
 const REF_FRAMES_LOG2: u32 = 3;
 
-/*const NONE_FRAME: isize = -1;
-const INTRA_FRAME: usize = 0;*/
+//const NONE_FRAME: isize = -1;
+//const INTRA_FRAME: usize = 0;
 const LAST_FRAME: usize = 1;
-
-/*const LAST2_FRAME: usize = 2;
-const LAST3_FRAME: usize = 3;
+//const LAST2_FRAME: usize = 2;
+//const LAST3_FRAME: usize = 3;
 const GOLDEN_FRAME: usize = 4;
 const BWDREF_FRAME: usize = 5;
-const ALTREF2_FRAME: usize = 6;*/
+//const ALTREF2_FRAME: usize = 6;
 const ALTREF_FRAME: usize = 7;
 /*const LAST_REF_FRAMES: usize = LAST3_FRAME - LAST_FRAME + 1;
-
 const INTER_REFS_PER_FRAME: usize = ALTREF_FRAME - LAST_FRAME + 1;
 const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
-
+*/
 const FWD_REFS: usize = GOLDEN_FRAME - LAST_FRAME + 1;
 //const FWD_RF_OFFSET(ref) (ref - LAST_FRAME)
 const BWD_REFS: usize = ALTREF_FRAME - BWDREF_FRAME + 1;
 //const BWD_RF_OFFSET(ref) (ref - BWDREF_FRAME)
 
 const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
-*/
+
 
 impl fmt::Display for FrameType{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -1392,11 +1392,13 @@ fn diff(dst: &mut [i16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, hei
 // dequantize, inverse-transform.
 pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
                   p: usize, bo: &BlockOffset, mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
-                  plane_bsize: BlockSize, po: &PlaneOffset, skip: bool) {
+                  plane_bsize: BlockSize, po: &PlaneOffset, skip: bool, is_inter: bool) {
     let rec = &mut fs.rec.planes[p];
     let PlaneConfig { stride, xdec, ydec } = fs.input.planes[p].cfg;
 
-    mode.predict(&mut rec.mut_slice(po), tx_size);
+    if !is_inter {
+        mode.predict(&mut rec.mut_slice(po), tx_size);
+    }
 
     if skip { return; }
 
@@ -1433,7 +1435,14 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
 
     if fi.frame_type == FrameType::INTER {
         cw.write_is_inter(bo, is_inter);
-        if !is_inter {
+        if is_inter {
+            // FIXME: Check if mode_context = 51 is correct
+            let mode_context = 51 as u16;
+            // NOTE: Until rav1e supports other inter modes than GLOBALMV
+            assert!(luma_mode == PredictionMode::GLOBALMV);
+            cw.write_inter_mode(luma_mode, mode_context);
+            cw.write_ref_frames();
+        } else {
             cw.write_intra_mode(bsize, luma_mode);
         }
     } else {
@@ -1448,7 +1457,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         cw.write_angle_delta(0, luma_mode);
     }
 
-    if has_chroma(bo, bsize, xdec, ydec) {
+    if has_chroma(bo, bsize, xdec, ydec) && !is_inter {
         cw.write_intra_uv_mode(chroma_mode, luma_mode, bsize);
         if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
             cw.write_angle_delta(0, chroma_mode);
@@ -1482,7 +1491,14 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         TxType::DCT_DCT
     };
 
-    write_tx_blocks(fi, fs, cw, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip);
+    // if inter, predict here
+    //mode.predict(&mut rec.mut_slice(po), tx_size);
+
+    if is_inter {
+        write_tx_tree(fi, fs, cw, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip); // i.e. var-tx if inter mode
+    } else {
+        write_tx_blocks(fi, fs, cw, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip);
+    }
 }
 
 pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
@@ -1492,6 +1508,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let bh = bsize.height_mi() / tx_size.height_mi();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    let is_inter = luma_mode >= PredictionMode::NEARESTMV;
 
     fs.qc.update(fi.config.quantizer, tx_size);
 
@@ -1503,7 +1520,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
             };
 
             let po = tx_bo.plane_offset(&fs.input.planes[0].cfg);
-            encode_tx_block(fi, fs, cw, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po, skip);
+            encode_tx_block(fi, fs, cw, 0, &tx_bo, luma_mode, tx_size, tx_type,
+                            bsize, &po, skip, is_inter);
         }
     }
 
@@ -1554,9 +1572,67 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
                     };
 
                     encode_tx_block(fi, fs, cw, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
-                                    plane_bsize, &po, skip);
+                                    plane_bsize, &po, skip, is_inter);
                 }
             }
+        }
+    }
+}
+
+// FIXME: For now, assume tx_mode is LARGEST_TX, so var-tx is not implemented yet
+// but only one tx block exist for a inter mode partition.
+pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+                       luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
+                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool) {
+    let bw = bsize.width_mi() / tx_size.width_mi();
+    let bh = bsize.height_mi() / tx_size.height_mi();
+
+    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+
+    fs.qc.update(fi.config.quantizer, tx_size);
+
+    let po = bo.plane_offset(&fs.input.planes[0].cfg);
+    encode_tx_block(fi, fs, cw, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip,
+                    true);
+
+    // these are only valid for 4:2:0
+    let uv_tx_size = match bsize {
+        BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
+        BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
+        BlockSize::BLOCK_32X32 => TxSize::TX_16X16,
+        _ => TxSize::TX_32X32
+    };
+
+    let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
+    let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
+
+    if (bw_uv == 0 || bh_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
+        bw_uv = 1;
+        bh_uv = 1;
+    }
+
+    bw_uv /= uv_tx_size.width_mi();
+    bh_uv /= uv_tx_size.height_mi();
+
+    let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
+
+    if bw_uv > 0 && bh_uv > 0 {
+        let uv_tx_type = tx_type;   // if inter mode, uv_tx_type == tx_type
+        let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
+        let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
+
+        fs.qc.update(fi.config.quantizer, uv_tx_size);
+
+        for p in 1..3 {
+            let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
+
+            let po = PlaneOffset {
+                x: sb_offset.x + partition_x,
+                y: sb_offset.y + partition_y
+            };
+
+            encode_tx_block(fi, fs, cw, p, &bo, chroma_mode, uv_tx_size, uv_tx_type,
+                            plane_bsize, &po, skip, true);
         }
     }
 }
@@ -2114,6 +2190,15 @@ fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut Fram
             None => (),
         }
     } else {
+        // FIXME: Until we have Motion Compensation implemented,
+        // just copy the previous frame to the current reconstructed frame buffer
+        // when all inter mode is coded as GLOBALMV == zeromv.
+        match last_rec {
+            Some(ref rec) => for p in 0..3 {
+                fs.rec.planes[p].data.copy_from_slice(rec.planes[p].data.as_slice());
+            },
+            None => (),
+        }
         let tile = encode_tile(fi, fs); // actually tile group
         let obu_payload_size = tile.len() as u64;
         let mut buf1 = Vec::new();
