@@ -409,6 +409,50 @@ pub fn rdo_partition_decision(
           .clone();
         child_modes.push(mode_decision);
       }
+      PartitionType::PARTITION_HORZ => {
+        let subsize = get_subsize(bsize, partition);
+
+        if subsize == BlockSize::BLOCK_INVALID {
+          continue;
+        }
+
+        let bs = bsize.width_mi();
+        let hbs = bs >> 1; // Half the block size in blocks
+
+        let offset = BlockOffset { x: bo.x, y: bo.y };
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
+          .part_modes[0]
+          .clone();
+        child_modes.push(mode_decision);
+
+        let offset = BlockOffset { x: bo.x, y: bo.y + hbs as usize };
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
+          .part_modes[0]
+          .clone();
+        child_modes.push(mode_decision);
+      }
+      PartitionType::PARTITION_VERT => {
+        let subsize = get_subsize(bsize, partition);
+
+        if subsize == BlockSize::BLOCK_INVALID {
+          continue;
+        }
+
+        let bs = bsize.width_mi();
+        let hbs = bs >> 1; // Half the block size in blocks
+
+        let offset = BlockOffset { x: bo.x, y: bo.y };
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
+          .part_modes[0]
+          .clone();
+        child_modes.push(mode_decision);
+
+        let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y };
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
+          .part_modes[0]
+          .clone();
+        child_modes.push(mode_decision);
+      }
       _ => {
         assert!(false);
       }

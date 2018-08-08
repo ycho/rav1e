@@ -1517,13 +1517,14 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
         partition = PartitionType::PARTITION_NONE;
     }
 
-    assert!(bsize.width_mi() == bsize.height_mi());
     assert!(PartitionType::PARTITION_NONE <= partition &&
             partition < PartitionType::PARTITION_INVALID);
 
     let hbs = bs >> 1; // Half the block size in blocks
     let subsize = get_subsize(bsize, partition);
-
+    if partition != PartitionType::PARTITION_NONE {
+        assert!(subsize != BlockSize::BLOCK_INVALID);
+    }
     if bsize >= BlockSize::BLOCK_8X8 {
         let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
         cw.write_partition(w, bo, partition, bsize);
@@ -1552,8 +1553,6 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
         PartitionType::PARTITION_SPLIT => {
             if rdo_output.part_modes.len() >= 4 {
                 // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
-                assert!(subsize != BlockSize::BLOCK_INVALID);
-
                 for mode in rdo_output.part_modes {
                     let offset = mode.bo.clone();
 
@@ -1574,6 +1573,74 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                                          &BlockOffset{x: bo.x, y: bo.y + hbs as usize}, &None);
                 encode_partition_topdown(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
                                          &BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize}, &None);
+            }
+        },
+        PartitionType::PARTITION_HORZ => {
+            if rdo_output.part_modes.len() >= 2 {
+                for mode in rdo_output.part_modes {
+                    let part_decision = mode.clone();
+                    let (mode_luma, mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
+                    let skip = part_decision.skip;
+                    let mut cdef_coded = cw.bc.cdef_coded;
+
+                    // FIXME: every final block that has gone through the RDO decision process is encoded twice
+                    cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                                bsize, bo, skip);
+                    encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                                mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
+                }
+            }
+            else {
+                let mut part_decision = rdo_mode_decision(seq, fi, fs, cw, bsize,
+                    bo).part_modes[0].clone();
+                let (mut mode_luma, mut mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
+                let mut skip = part_decision.skip;
+                let mut cdef_coded = cw.bc.cdef_coded;                
+
+                encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                            mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
+
+                let offset = &BlockOffset{x: bo.x, y: bo.y + hbs as usize};
+                part_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, offset).part_modes[0].clone();
+                let (mode_luma, mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
+                let skip = part_decision.skip;
+                encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                            mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
+            }
+        },
+        PartitionType::PARTITION_VERT => {
+            if rdo_output.part_modes.len() >= 2 {
+                for mode in rdo_output.part_modes {
+                    let part_decision = mode.clone();
+                    let (mode_luma, mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
+                    let skip = part_decision.skip;
+                    let mut cdef_coded = cw.bc.cdef_coded;
+
+                    // FIXME: every final block that has gone through the RDO decision process is encoded twice
+                    cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                                bsize, bo, skip);
+                    encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                                mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
+                }
+            }
+            else {
+                let mut part_decision = rdo_mode_decision(seq, fi, fs, cw, bsize,
+                    bo).part_modes[0].clone();
+                let (mut mode_luma, mut mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
+                let mut skip = part_decision.skip;
+                let mut cdef_coded = cw.bc.cdef_coded;
+
+                encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                    mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
+
+                let offset = &BlockOffset{x: bo.x + hbs as usize, y: bo.y};
+                part_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, offset).part_modes[0].clone();
+                let (mode_luma, mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
+                skip = part_decision.skip;
+                cdef_coded = cw.bc.cdef_coded;
+
+                encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                    mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
             }
         },
         _ => { assert!(false); },
