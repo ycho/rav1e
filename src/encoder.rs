@@ -1702,20 +1702,17 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let mv = mode_decision.mv;
         let skip = mode_decision.skip;
         let mut cdef_coded = cw.bc.cdef_coded;
-        //let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
-        let (tx_size, tx_type) =
-            rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
+        let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
+        //let (tx_size, tx_type) =
+            //rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
-        assert!(tx_size == mode_decision.tx_size);
-        assert!(tx_type == mode_decision.tx_type);
+        //assert!(tx_size == mode_decision.tx_size);
+        //assert!(tx_type == mode_decision.tx_type);
 
         rd_cost = mode_decision.rd_cost + cost;
 
         let mut mv_stack = Vec::new();
         let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
-
-        let (tx_size, tx_type) =
-          rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
         cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                    bsize, bo, skip);
@@ -1788,18 +1785,15 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             let mv = best_decision.mv;
             let skip = best_decision.skip;
             let mut cdef_coded = cw.bc.cdef_coded;
-            //let (tx_size, tx_type) = (best_decision.tx_size, best_decision.tx_type);
-            let (tx_size, tx_type) =
-                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
+            let (tx_size, tx_type) = (best_decision.tx_size, best_decision.tx_type);
+            //let (tx_size, tx_type) =
+                //rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
-            assert!(tx_size == best_decision.tx_size);
-            assert!(tx_type == best_decision.tx_type);
+            //assert!(tx_size == best_decision.tx_size);
+            //assert!(tx_type == best_decision.tx_type);
 
             let mut mv_stack = Vec::new();
             let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
-
-            let (tx_size, tx_type) =
-                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
             cdef_coded = encode_block_a(seq, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                                        bsize, bo, skip);
@@ -1888,8 +1882,8 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let (tx_size, tx_type) =
                 rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
-            assert!(tx_size == part_decision.tx_size);
-            assert!(tx_type == part_decision.tx_type);
+            //assert!(tx_size == part_decision.tx_size);
+            //assert!(tx_type == part_decision.tx_type);
 
             let mut mv_stack = Vec::new();
             let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
