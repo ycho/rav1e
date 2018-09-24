@@ -357,6 +357,7 @@ pub struct FrameInvariants {
     pub ref_frames: [usize; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
     pub base_q_idx: u8,
+    pub use_tx_domain_distortion: bool,
 }
 
 impl FrameInvariants {
@@ -423,6 +424,7 @@ impl FrameInvariants {
             ref_frames: [0; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new(),
             base_q_idx: config.quantizer as u8,
+            use_tx_domain_distortion: true,
         }
     }
 
@@ -1248,8 +1250,10 @@ pub fn encode_tx_block(
 
     let mut residual: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
     let mut coeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
+    let mut qcoeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
     let mut rcoeffs: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
     let coeffs = &mut coeffs_storage.array[..tx_size.area()];
+    let qcoeffs = &mut qcoeffs_storage.array[..tx_size.area()];
 
     diff(&mut residual.array,
          &fs.input.planes[p].slice(po),
@@ -1258,14 +1262,24 @@ pub fn encode_tx_block(
          tx_size.height());
 
     forward_transform(&residual.array, coeffs, tx_size.width(), tx_size, tx_type, bit_depth);
-    fs.qc.quantize(coeffs);
+    fs.qc.quantize(coeffs, qcoeffs);
 
-    let has_coeff = cw.write_coeffs_lv_map(w, p, bo, &coeffs, mode, tx_size, tx_type, plane_bsize, xdec, ydec,
+    let has_coeff = cw.write_coeffs_lv_map(w, p, bo, &qcoeffs, mode, tx_size, tx_type, plane_bsize, xdec, ydec,
                             fi.use_reduced_tx_set);
 
     // Reconstruct
-    dequantize(fi.base_q_idx, &coeffs, &mut rcoeffs.array, tx_size, bit_depth);
+    dequantize(fi.base_q_idx, qcoeffs, &mut rcoeffs.array, tx_size, bit_depth);
 
+    // Store tx-domain distortion of this block
+    if fi.use_tx_domain_distortion {
+        let tx_dist = coeffs
+            .iter()
+            .zip(&rcoeffs.array[..tx_size.area()])
+            .map(|(&a, &b)| {
+                let c = (a as i16 - b as i16) as i32;
+                (c * c) as u32
+            }).sum::<u32>();
+    }
     inverse_transform_add(&rcoeffs.array, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
     has_coeff
 }
