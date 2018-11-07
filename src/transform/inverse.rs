@@ -3,6 +3,7 @@ use super::*;
 use std::cmp;
 
 use partition::TxType;
+use partition::TxSize;
 
 static COSPI_INV: [i32; 64] = [
   4096, 4095, 4091, 4085, 4076, 4065, 4052, 4036, 4017, 3996, 3973, 3948,
@@ -916,3 +917,61 @@ pub fn iht32x32_add(
     Block32x32::inv_txfm2d_add_rs(input, output, stride, tx_type, bit_depth);
   }
 }
+
+fn get_intermediate_shift(tx_size: TxSize) -> usize {
+
+  let size = tx_size.width() * tx_size.height();
+  let shift: usize =
+  if size <= 4 * 4 { 0 }
+  else {
+    if size <= 8 * 8 { 1 } else { 2 }
+  };
+
+  shift
+}
+
+pub fn inv_txfm2d_add_wow(
+    input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType,
+    tx_size: TxSize, bd: usize
+  ) {
+    let txw = tx_size.width();
+    let txh = tx_size.height();
+
+    let buffer = &mut [0i32; 64 * 64][..txw * txh];
+    let tx_types_1d = get_1d_tx_types(tx_type)
+      .expect("TxType not supported by rust txfm code.");
+    // perform inv txfm on every row
+    let range = bd + 8;
+    let txfm_fn = INV_TXFM_FNS[tx_types_1d.1 as usize][txw.ilog() - 3];
+    for (input_slice, buffer_slice) in
+      input.chunks(txw).zip(buffer.chunks_mut(txw))
+    {
+      let mut temp_in: [i32; 64] = [0; 64];
+      for (raw, clamped) in input_slice.iter().zip(temp_in.iter_mut()) {
+        *clamped = clamp_value(*raw, range);
+      }
+      txfm_fn(&temp_in, buffer_slice, range);
+    }
+
+    // perform inv txfm on every col
+    let range = cmp::max(bd + 6, 16);
+    let txfm_fn = INV_TXFM_FNS[tx_types_1d.0 as usize][txh.ilog() - 3];
+    for c in 0..txh {
+      let mut temp_in: [i32; 64] = [0; 64];
+      let mut temp_out: [i32; 64] = [0; 64];
+      for (raw, clamped) in
+        buffer[c..].iter().step_by(txw).zip(temp_in.iter_mut())
+      {
+        *clamped =
+          clamp_value(round_shift(*raw, get_intermediate_shift(tx_size)), range);
+      }
+      txfm_fn(&temp_in, &mut temp_out, range);
+      for (temp, out) in temp_out
+        .iter()
+        .zip(output[c..].iter_mut().step_by(stride).take(txh))
+      {
+        *out =
+          clamp(*out as i32 + round_shift(*temp, 4), 0, (1 << bd) - 1) as u16;
+      }
+    }
+  }

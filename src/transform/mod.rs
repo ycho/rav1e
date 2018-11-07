@@ -253,20 +253,22 @@ pub fn forward_transform(
   input: &[i16], output: &mut [i32], stride: usize, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize
 ) {
-  match tx_size {
+  fwd_txfm2d_wow(input, output, stride, tx_type, tx_size, bit_depth);
+  /*match tx_size {
     TxSize::TX_4X4 => fht4x4(input, output, stride, tx_type, bit_depth),
     TxSize::TX_8X8 => fht8x8(input, output, stride, tx_type, bit_depth),
     TxSize::TX_16X16 => fht16x16(input, output, stride, tx_type, bit_depth),
     TxSize::TX_32X32 => fht32x32(input, output, stride, tx_type, bit_depth),
     _ => panic!("unimplemented tx size")
-  }
+  }*/
 }
 
 pub fn inverse_transform_add(
   input: &[i32], output: &mut [u16], stride: usize, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize
 ) {
-  match tx_size {
+  inv_txfm2d_add_wow(input, output, stride, tx_type, tx_size, bit_depth);
+  /*match tx_size {
     TxSize::TX_4X4 => iht4x4_add(input, output, stride, tx_type, bit_depth),
     TxSize::TX_8X8 => iht8x8_add(input, output, stride, tx_type, bit_depth),
     TxSize::TX_16X16 =>
@@ -274,5 +276,5 @@ pub fn inverse_transform_add(
     TxSize::TX_32X32 =>
       iht32x32_add(input, output, stride, tx_type, bit_depth),
     _ => panic!("unimplemented tx size")
-  }
+  }*/
 }

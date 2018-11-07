@@ -2040,3 +2040,95 @@ pub fn fht32x32(
     Block32x32::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
   }
 }
+
+  pub fn fwd_txfm2d_wow(
+    input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+    tx_size: TxSize, bd: usize
+  ) {
+    let buf = &mut [0i32; 64 * 64][..tx_size.width() * tx_size.height()];
+    let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size);
+
+    // Note when assigning txfm_size_col, we use the txfm_size from the
+    // row configuration and vice versa. This is intentionally done to
+    // accurately perform rectangular transforms. When the transform is
+    // rectangular, the number of columns will be the same as the
+    // txfm_size stored in the row cfg struct. It will make no difference
+    // for square transforms.
+    let txfm_size_col = TxSize::width(cfg.tx_size);
+    let txfm_size_row = TxSize::height(cfg.tx_size);
+    // Take the shift from the larger dimension in the rectangular case.
+    assert!(cfg.stage_num_col <= MAX_TXFM_STAGE_NUM);
+    assert!(cfg.stage_num_row <= MAX_TXFM_STAGE_NUM);
+    let rect_type = get_rect_tx_log_ratio(txfm_size_col, txfm_size_row);
+    let mut stage_range_col = [0; MAX_TXFM_STAGE_NUM];
+    let mut stage_range_row = [0; MAX_TXFM_STAGE_NUM];
+    av1_gen_fwd_stage_range(
+      &mut stage_range_col,
+      &mut stage_range_row,
+      &cfg,
+      bd as i8
+    );
+
+    let txfm_func_col = cfg.txfm_type_col.get_func();
+    let txfm_func_row = cfg.txfm_type_row.get_func();
+
+    // Columns
+    for c in 0..txfm_size_col {
+      if cfg.ud_flip {
+        // flip upside down
+        for r in 0..txfm_size_row {
+          output[r] = (input[(txfm_size_row - r - 1) * stride + c]).into();
+        }
+      } else {
+        for r in 0..txfm_size_row {
+          output[r] = (input[r * stride + c]).into();
+        }
+      }
+      av1_round_shift_array(output, txfm_size_row, -cfg.shift[0]);
+      txfm_func_col(
+        &output[..txfm_size_row].to_vec(),
+        &mut output[txfm_size_row..],
+        cfg.cos_bit_col as usize,
+        &mut stage_range_col
+      );
+      av1_round_shift_array(
+        &mut output[txfm_size_row..],
+        txfm_size_row,
+        -cfg.shift[1]
+      );
+      if cfg.lr_flip {
+        for r in 0..txfm_size_row {
+          // flip from left to right
+          buf[r * txfm_size_col + (txfm_size_col - c - 1)] =
+            output[txfm_size_row + r];
+        }
+      } else {
+        for r in 0..txfm_size_row {
+          buf[r * txfm_size_col + c] = output[txfm_size_row + r];
+        }
+      }
+    }
+
+    // Rows
+    for r in 0..txfm_size_row {
+      txfm_func_row(
+        &buf[r * txfm_size_col..],
+        &mut output[r * txfm_size_col..],
+        cfg.cos_bit_row as usize,
+        &mut stage_range_row
+      );
+      av1_round_shift_array(
+        &mut output[r * txfm_size_col..],
+        txfm_size_col,
+        -cfg.shift[2]
+      );
+      if rect_type.abs() == 1 {
+        // Multiply everything by Sqrt2 if the transform is rectangular and the
+        // size difference is a factor of 2.
+        for c in 0..txfm_size_col {
+          output[r * txfm_size_col + c] =
+            round_shift(output[r * txfm_size_col + c] * SQRT2, SQRT2_BITS);
+        }
+      }
+    }
+  }
