@@ -28,20 +28,20 @@ use std::arch::x86_64::*;
 
 pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
   PredictionMode::DC_PRED,
-  PredictionMode::H_PRED,
+  /*PredictionMode::H_PRED,
   PredictionMode::V_PRED,
   PredictionMode::SMOOTH_PRED,
   PredictionMode::SMOOTH_H_PRED,
   PredictionMode::SMOOTH_V_PRED,
-  PredictionMode::PAETH_PRED
+  PredictionMode::PAETH_PRED*/
 ];
 
 // Intra prediction modes tested at high speed levels
 #[cfg_attr(rustfmt, rustfmt_skip)]
 pub static RAV1E_INTRA_MODES_MINIMAL: &'static [PredictionMode] = &[
     PredictionMode::DC_PRED,
-    PredictionMode::H_PRED,
-    PredictionMode::V_PRED
+    /*PredictionMode::H_PRED,
+    PredictionMode::V_PRED*/
 ];
 
 pub static RAV1E_INTER_MODES_MINIMAL: &'static [PredictionMode] = &[
