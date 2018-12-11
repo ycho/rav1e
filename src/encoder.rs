@@ -2219,7 +2219,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     let mut rd_cost = std::f64::MAX;
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
-        return rd_cost;
+        return 0.0;
     }
 
     let bs = bsize.width_mi();
