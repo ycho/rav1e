@@ -310,7 +310,8 @@ pub fn rdo_tx_size_type(
   let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
 
   let tx_type =
-    if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed_settings.rdo_tx_decision && !skip {
+    if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed_settings.rdo_tx_decision && !skip
+      && bsize.is_sqr() {
       rdo_tx_type_decision(
         fi,
         fs,
