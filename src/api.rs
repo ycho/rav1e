@@ -89,7 +89,7 @@ impl SpeedSettings {
       fast_deblock: Self::fast_deblock_preset(speed),
       reduced_tx_set: Self::reduced_tx_set_preset(speed),
       tx_domain_distortion: Self::tx_domain_distortion_preset(speed),
-      encode_bottomup: Self::encode_bottomup_preset(speed),
+      encode_bottomup: true, //Self::encode_bottomup_preset(speed),
       rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
       prediction_modes: Self::prediction_modes_preset(speed),
       include_near_mvs: Self::include_near_mvs_preset(speed),
