@@ -2269,6 +2269,7 @@ fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
     // TODO(yushin): Try move PARTITION_NONE to below partition loop
     if !must_split {
         let mut cost: f64 = 0.0;
+        best_partition = PartitionType::PARTITION_NONE;
 
         if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
@@ -2287,13 +2288,12 @@ fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
         let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
 
         rd_cost = mode_decision.rd_cost + cost;
-
-        if rd_cost < ref_rd_cost {
-            best_partition = PartitionType::PARTITION_NONE;
+        {
             best_rd = rd_cost;
             best_decision = mode_decision.clone();
             best_pred_modes.push(best_decision.clone());
-
+        }
+        if rd_cost < ref_rd_cost {
             encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
                                 &mode_decision);
         }
@@ -2340,6 +2340,7 @@ fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
                 &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
             ];
             let partitions = get_sub_partitions(&four_partitions, partition);
+            let mut early_exit = false;
 
             // If either of horz or vert partition types is being tested,
             // two partitioned rectangles, defined in 'partitions', of the current block
@@ -2357,21 +2358,24 @@ fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
                     best_rd
                 ) {
                     rd_cost += cost;
-                    if rd_cost > best_rd || rd_cost > ref_rd_cost { break; }
+                    if rd_cost > best_rd || rd_cost > ref_rd_cost {
+                        early_exit = true;
+                        break;
+                    }
                     else { child_modes.push(mode_decision); }
                 }
             };
 
             if rd_cost < best_rd && rd_cost < ref_rd_cost {
+                assert!(early_exit == false);
                 best_rd = rd_cost;
                 best_partition = partition;
                 best_pred_modes = child_modes.clone();
             }
         }
 
-        // If the best partition is not PARTITION_SPLIT or PARTITION_INVALID, recode it
-        if best_partition != PartitionType::PARTITION_SPLIT &&
-            best_partition != PartitionType::PARTITION_INVALID {
+        // If the best partition is not PARTITION_SPLIT, recode it
+        if best_partition != PartitionType::PARTITION_SPLIT {
             cw.rollback(&cw_checkpoint);
             w_pre_cdef.rollback(&w_pre_checkpoint);
             w_post_cdef.rollback(&w_post_checkpoint);
@@ -2393,7 +2397,11 @@ fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
         }
     }
 
-    if best_partition != PartitionType::PARTITION_INVALID {
+    // If must_split is true, then best_partition != PartitionType::PARTITION_NONE
+    assert!(!must_split || best_partition != PartitionType::PARTITION_NONE);
+    assert!(best_partition != PartitionType::PARTITION_INVALID);
+
+    {
         let subsize = bsize.subsize(best_partition);
 
         if bsize.gte(BlockSize::BLOCK_8X8) &&
@@ -2401,6 +2409,7 @@ fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
             cw.bc.update_partition_context(bo, subsize, bsize);
         }
     }
+
     (best_rd, Some(best_decision))
 }
 
