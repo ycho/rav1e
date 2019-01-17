@@ -2358,7 +2358,7 @@ fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
                     best_rd
                 ) {
                     rd_cost += cost;
-                    if rd_cost > best_rd || rd_cost > ref_rd_cost {
+                    if rd_cost >= best_rd || (ref_rd_cost < std::f64::MAX && rd_cost >= ref_rd_cost) {
                         early_exit = true;
                         break;
                     }
@@ -2366,8 +2366,7 @@ fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
                 }
             };
 
-            if rd_cost < best_rd && rd_cost < ref_rd_cost {
-                assert!(early_exit == false);
+            if !early_exit && rd_cost < best_rd && (ref_rd_cost == std::f64::MAX || rd_cost < ref_rd_cost) {
                 best_rd = rd_cost;
                 best_partition = partition;
                 best_pred_modes = child_modes.clone();
