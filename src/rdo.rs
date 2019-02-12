@@ -27,7 +27,7 @@ use me::*;
 use motion_compensate;
 use partition::*;
 use plane::*;
-use predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
+use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
 use quantize::dc_q;
 use Tune;
 use write_tx_blocks;
@@ -610,7 +610,8 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
       3
     };
 
-    let intra_mode_set = RAV1E_INTRA_MODES;
+    let intra_mode_set = RAV1E_INTRA_MODES_MINIMAL;
+    /*
     let mut sads = {
       let edge_buf = {
         let rec = &mut fs.rec.planes[0];
@@ -672,6 +673,9 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
         modes.push(luma_mode)
       }
     });
+*/
+    let num_modes_rdo = 3;
+    let modes = intra_mode_set;
 
     modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
       let mvs = [MotionVector { row: 0, col: 0 }; 2];
