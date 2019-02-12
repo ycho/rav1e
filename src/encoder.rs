@@ -660,7 +660,7 @@ impl FrameInvariants {
       me_range_scale: 1,
       use_tx_domain_distortion,
       inter_cfg: None,
-      enable_early_exit: true,
+      enable_early_exit: false,
     }
   }
 
