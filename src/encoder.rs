@@ -2837,6 +2837,26 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
     }
 }
 
+fn run_sb_rows(fi: &FrameInvariants, fs: &FrameState,
+  frame_pmvs: &mut Vec<[Option<MotionVector>; REF_FRAMES]>, sb_from: usize, sb_to: usize) {
+
+    for sby in sb_from..sb_to {
+      for sbx in 0..fi.sb_width {
+        let sbo = SuperBlockOffset { x: sbx, y: sby };
+        let bo = sbo.block_offset(0, 0);
+        let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
+        for i in 0..INTER_REFS_PER_FRAME {
+          let r = fi.ref_frames[i] as usize;
+          if pmvs[r].is_none() {
+            assert!(!fi.sequence.use_128x128_superblock);
+            pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo);
+          }
+        }
+        frame_pmvs.push(pmvs);
+      }
+    }
+}
+
 fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
   let mut w = WriterEncoder::new();
 
@@ -2855,22 +2875,28 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
 
   // initial coarse ME loop
   let mut frame_pmvs = Vec::new();
+  let mut frame_pmvs0 = Vec::new();
+  let mut frame_pmvs1 = Vec::new();
+  let mut frame_pmvs2 = Vec::new();
+  let mut frame_pmvs3 = Vec::new();
 
-  for sby in 0..fi.sb_height {
-    for sbx in 0..fi.sb_width {
-      let sbo = SuperBlockOffset { x: sbx, y: sby };
-      let bo = sbo.block_offset(0, 0);
-      let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
-      for i in 0..INTER_REFS_PER_FRAME {
-        let r = fi.ref_frames[i] as usize;
-        if pmvs[r].is_none() {
-          assert!(!fi.sequence.use_128x128_superblock);
-          pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo);
-        }
+  rayon::scope(|s| {
+      s.spawn(|_| run_sb_rows(fi, fs, &mut frame_pmvs0, 0, fi.sb_height/4) );
+      if 2*fi.sb_height/4 > fi.sb_height/4 {
+        s.spawn(|_| run_sb_rows(fi, fs, &mut frame_pmvs1, fi.sb_height/4, 2*fi.sb_height/4) );
+      };
+      if 3*fi.sb_height/4 > 2*fi.sb_height/4 {
+        s.spawn(|_| run_sb_rows(fi, fs, &mut frame_pmvs2, 2*fi.sb_height/4, 3*fi.sb_height/4) );
       }
-      frame_pmvs.push(pmvs);
-    }
-  }
+      if fi.sb_height > 3*fi.sb_height/4 {
+        s.spawn(|_| run_sb_rows(fi, fs, &mut frame_pmvs3, 3*fi.sb_height/4, fi.sb_height) );
+      }
+  });
+
+  frame_pmvs.append(&mut frame_pmvs0);
+  frame_pmvs.append(&mut frame_pmvs1);
+  frame_pmvs.append(&mut frame_pmvs2);
+  frame_pmvs.append(&mut frame_pmvs3);
 
   // main loop
   for sby in 0..fi.sb_height {
