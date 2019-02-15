@@ -2682,9 +2682,10 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
       partition_types.push(PartitionType::PARTITION_NONE);
       partition_types.push(PartitionType::PARTITION_SPLIT);
     }
-    rdo_output = rdo_partition_decision(fi, fs, cw,
+    /*rdo_output = rdo_partition_decision(fi, fs, cw,
                                         w_pre_cdef, w_post_cdef, bsize, bo, &rdo_output, pmvs, &partition_types);
-    partition = rdo_output.part_type;
+    partition = rdo_output.part_type;*/
+    partition = PartitionType::PARTITION_SPLIT;
   } else {
     // Blocks of sizes below the supported range are encoded directly
     partition = PartitionType::PARTITION_NONE;
