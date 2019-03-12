@@ -1147,6 +1147,7 @@ pub fn encode_block_b<T: Pixel>(
     cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
   }
   cw.bc.set_block_size(bo, bsize);
+  cw.bc.set_tx_size(bo, tx_size);
   cw.bc.set_mode(bo, bsize, luma_mode);
   cw.bc.set_ref_frames(bo, bsize, ref_frames);
   cw.bc.set_motion_vectors(bo, bsize, mvs);
@@ -1485,7 +1486,6 @@ pub fn encode_block_with_modes<T: Pixel>(
 
   debug_assert!((tx_size, tx_type) ==
                 rdo_tx_size_type(fi, fs, cw, bsize, bo, mode_luma, ref_frames, mvs, skip));
-  cw.bc.set_tx_size(bo, tx_size);
 
   let mut mv_stack = Vec::new();
   let is_compound = ref_frames[1] != NONE_FRAME;
