@@ -119,6 +119,51 @@ static av1_tx_ind: [[usize; TX_TYPES]; TX_SETS] = [
   [7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6]
 ];
 
+static max_txsize_rect_lookup: [TxSize; BlockSize::BLOCK_SIZES_ALL] = [
+      // 4X4
+      TX_4X4,
+      // 4X8,    8X4,      8X8
+      TX_4X8,    TX_8X4,   TX_8X8,
+      // 8X16,   16X8,     16X16
+      TX_8X16,   TX_16X8,  TX_16X16,
+      // 16X32,  32X16,    32X32
+      TX_16X32,  TX_32X16, TX_32X32,
+      // 32X64,  64X32,
+      TX_32X64,  TX_64X32,
+      // 64X64
+      TX_64X64,
+      // 64x128, 128x64,   128x128
+      TX_64X64,  TX_64X64, TX_64X64,
+      // 4x16,   16x4,
+      TX_4X16,   TX_16X4,
+      // 8x32,   32x8
+      TX_8X32,   TX_32X8,
+      // 16x64,  64x16
+      TX_16X64,  TX_64X16
+];
+
+static sub_tx_size_map: [TxSize; TxSize::TX_SIZES_ALL] = [
+  TX_4X4,    // TX_4X4
+  TX_4X4,    // TX_8X8
+  TX_8X8,    // TX_16X16
+  TX_16X16,  // TX_32X32
+  TX_32X32,  // TX_64X64
+  TX_4X4,    // TX_4X8
+  TX_4X4,    // TX_8X4
+  TX_8X8,    // TX_8X16
+  TX_8X8,    // TX_16X8
+  TX_16X16,  // TX_16X32
+  TX_16X16,  // TX_32X16
+  TX_32X32,  // TX_32X64
+  TX_32X32,  // TX_64X32
+  TX_4X8,    // TX_4X16
+  TX_8X4,    // TX_16X4
+  TX_8X16,   // TX_8X32
+  TX_16X8,   // TX_32X8
+  TX_16X32,  // TX_16X64
+  TX_32X16,  // TX_64X16
+];
+
 static ss_size_lookup: [[[BlockSize; 2]; 2]; BlockSize::BLOCK_SIZES_ALL] = [
   //  ss_x == 0    ss_x == 0        ss_x == 1      ss_x == 1
   //  ss_y == 0    ss_y == 1        ss_y == 0      ss_y == 1
@@ -700,6 +745,7 @@ pub struct CDFContext {
   intra_tx_cdf:
     [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTRA],
   inter_tx_cdf: [[[u16; TX_TYPES + 1]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTER],
+  tx_size_cdf: [[[u16; MAX_TX_DEPTH + 1 + 1]; TX_SIZE_CONTEXTS]; MAX_TX_CATS],
   skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
@@ -761,6 +807,7 @@ impl CDFContext {
       refmv_cdf: default_refmv_cdf,
       intra_tx_cdf: default_intra_ext_tx_cdf,
       inter_tx_cdf: default_inter_ext_tx_cdf,
+      tx_size_cdf: default_tx_size_cdf,
       skip_cdfs: default_skip_cdfs,
       intra_inter_cdfs: default_intra_inter_cdf,
       angle_delta_cdf: default_angle_delta_cdf,
@@ -1251,6 +1298,8 @@ pub struct BlockContext {
   pub preskip_segid: bool,
   above_partition_context: Vec<u8>,
   left_partition_context: [u8; MAX_MIB_SIZE],
+  above_tx_context: Vec<u8>,
+  left_tx_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [Vec<u8>; PLANES],
   left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
   blocks: Vec<Vec<Block>>
@@ -1273,6 +1322,8 @@ impl BlockContext {
       preskip_segid: true,
       above_partition_context: vec![0; aligned_cols],
       left_partition_context: [0; MAX_MIB_SIZE],
+      above_tx_context: vec![0; aligned_cols],
+      left_tx_context: [0; MAX_MIB_SIZE],
       above_coeff_context: [
         vec![0; above_coeff_context_size],
         vec![0; above_coeff_context_size],
@@ -1293,6 +1344,8 @@ impl BlockContext {
       preskip_segid: self.preskip_segid,
       above_partition_context: self.above_partition_context.clone(),
       left_partition_context: self.left_partition_context,
+      above_tx_context: self.above_tx_context.clone(),
+      left_tx_context: self.left_tx_context,
       above_coeff_context: self.above_coeff_context.clone(),
       left_coeff_context: self.left_coeff_context,
       blocks: vec![vec![Block::default(); 0]; 0]
@@ -1305,6 +1358,8 @@ impl BlockContext {
     self.cdef_coded = checkpoint.cdef_coded;
     self.above_partition_context = checkpoint.above_partition_context.clone();
     self.left_partition_context = checkpoint.left_partition_context;
+    self.above_tx_context = checkpoint.above_tx_context.clone();
+    self.left_tx_context = checkpoint.left_tx_context;
     self.above_coeff_context = checkpoint.above_coeff_context.clone();
     self.left_coeff_context = checkpoint.left_coeff_context;
   }
@@ -1386,7 +1441,12 @@ impl BlockContext {
       *c = 0;
     }
   }
-  //TODO(anyone): Add reset_left_tx_context() here then call it in reset_left_contexts()
+
+  fn reset_left_tx_context(&mut self) {
+    for c in &mut self.left_tx_context {
+      *c = 0;
+    }
+  }
 
   pub fn reset_skip_context(
     &mut self, bo: &BlockOffset, bsize: BlockSize, xdec: usize, ydec: usize
@@ -1435,7 +1495,7 @@ impl BlockContext {
     }
     BlockContext::reset_left_partition_context(self);
 
-    //TODO(anyone): Call reset_left_tx_context() here.
+    BlockContext::reset_left_tx_context(self);
   }
 
   pub fn set_mode(
@@ -1949,6 +2009,85 @@ impl ContextWriter {
       w.symbol((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
     }
   }
+
+  pub fn get_tx_size_context(&self, bo: &BlockOffset, bsize: BlockSize) -> usize {
+    let max_tx_size = max_txsize_rect_lookup[bsize as usize];
+    let max_tx_wide = max_tx_size.width();
+    let max_tx_high = max_tx_size.height();
+    let has_above = bo.y > 0;
+    let has_left = bo.x > 0;
+    let mut above = self.bc.above_tx_context[0] >= max_tx_wide as u8;
+    let mut left = self.bc.left_tx_context[0] >= max_tx_high as u8;
+
+    if has_above {
+      let above_blk = self.bc.above_of(bo);
+      if above_blk.is_inter() { above = (above_blk.n4_w << MI_SIZE_LOG2) >= max_tx_wide; };
+    }
+    if has_left {
+      let left_blk = self.bc.left_of(bo);
+      if left_blk.is_inter() { left = (left_blk.n4_h << MI_SIZE_LOG2) >= max_tx_high; };
+    }
+    if has_above && has_left { return above as usize + left as usize };
+    if has_above { return above as usize};
+    if has_left { return left as usize};
+    return 0
+  }
+
+  pub fn write_tx_size_intra(&mut self, w: &mut dyn Writer, bo: &BlockOffset,
+                          bsize: BlockSize, tx_size: TxSize) {
+    fn tx_size_to_depth(tx_size: TxSize, bsize: BlockSize ) -> usize {
+      let mut ctx_size = max_txsize_rect_lookup[bsize as usize];
+      let mut depth: usize = 0;
+      while tx_size != ctx_size {
+        depth += 1;
+        ctx_size = sub_tx_size_map[ctx_size as usize];
+        assert!(depth <= MAX_TX_DEPTH);
+      }
+      depth
+    }
+    fn bsize_to_max_depth(bsize: BlockSize) -> usize {
+      let mut tx_size: TxSize = max_txsize_rect_lookup[bsize as usize];
+      let mut depth = 0;
+      while depth < MAX_TX_DEPTH && tx_size != TX_4X4 {
+        depth += 1;
+        tx_size = sub_tx_size_map[tx_size as usize];
+      }
+      depth
+    }
+    fn bsize_to_tx_size_cat(bsize: BlockSize) -> usize {
+      let mut tx_size: TxSize =max_txsize_rect_lookup[bsize as usize];
+      assert!(tx_size != TX_4X4);
+      let mut depth = 0;
+      while tx_size != TX_4X4 {
+        depth += 1;
+        tx_size = sub_tx_size_map[tx_size as usize];
+        assert!(depth < 10);
+      }
+      assert!(depth <= MAX_TX_CATS);
+
+      depth - 1
+    }
+
+    assert!(self.bc.at(bo).is_inter() == false);
+
+    let tx_size_ctx = self.get_tx_size_context(bo, bsize);
+    let depth = tx_size_to_depth(tx_size, bsize);
+    let max_depths = bsize_to_max_depth(bsize);
+    let tx_size_cat = bsize_to_tx_size_cat(bsize);
+
+    assert!(depth <= max_depths);
+    assert!(tx_size.is_rect() || !bsize.is_rect_tx_allowed());
+    /*
+    assert(depth >= 0 && depth <= max_depths);
+    assert(!is_inter_block(mbmi));
+    assert(IMPLIES(is_rect_tx(tx_size), is_rect_tx_allowed(xd, mbmi)));
+
+    aom_write_symbol(w, depth, ec_ctx->tx_size_cdf[tx_size_cat][tx_size_ctx],
+                     max_depths + 1);
+    */
+    symbol_with_update!(self, w, depth as u32, &mut self.fc.tx_size_cdf[tx_size_cat][tx_size_ctx]);
+  }
+
   pub fn get_cdf_intra_mode_kf(&self, bo: &BlockOffset) -> &[u16; INTRA_MODES + 1] {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];

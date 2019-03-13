@@ -664,7 +664,11 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     // loop restoration
     self.write_frame_lrf(fi, &fs.restoration)?;
 
-    self.write_bit(false)?; // tx mode == TX_MODE_SELECT ?
+    if fi.frame_type == FrameType::KEY {
+      self.write_bit(true)?; // tx mode == TX_MODE_SELECT
+    } else {
+      self.write_bit(false)?; // tx mode == TX_MODE_LARGEST
+    }
 
     let mut reference_select = false;
     if !fi.intra_only {

@@ -7,6 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+#![allow(non_upper_case_globals)]
+
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
@@ -1265,6 +1267,12 @@ pub fn encode_block_b<T: Pixel>(
     if luma_mode == PredictionMode::DC_PRED && bsize.width() <= 32 && bsize.height() <= 32 {
       cw.write_use_filter_intra(w,false, bsize); // Always turn off FILTER_INTRA
     }
+  }
+
+  // write tx_size here (for now, intra frame only)
+  // TODO: Add new field tx_mode to fi, then Use the condition, fi.tx_mode == TX_MODE_SELECT
+  if bsize.greater_than(BlockSize::BLOCK_4X4) && fi.frame_type == FrameType::KEY {
+    cw.write_tx_size_intra(w, bo, bsize, tx_size);
   }
 
   if is_inter {
