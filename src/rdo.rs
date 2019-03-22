@@ -384,8 +384,9 @@ pub fn rdo_tx_size_type<T: Pixel>(
       _ => unimplemented!()
     }
   };
-  cw.bc.set_tx_size(bo, tx_size);
-  // Were we not hardcoded to TX_MODE_LARGEST, block tx size would be written here
+
+  debug_assert!(tx_size.width_log2() <= bsize.width_log2());
+  debug_assert!(tx_size.height_log2() <= bsize.height_log2());
 
   // Luma plane transform type decision
   let is_inter = !luma_mode.is_intra();

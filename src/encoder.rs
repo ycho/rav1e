@@ -1356,6 +1356,8 @@ pub fn write_tx_blocks<T: Pixel>(
         y: bo.y + by * tx_size.height_mi()
       };
 
+      cw.bc.set_tx_size(tx_bo, tx_size);
+
       let po = tx_bo.plane_offset(&fs.input.planes[0].cfg);
       let (_, dist) =
         encode_tx_block(
@@ -1442,6 +1444,8 @@ pub fn write_tx_tree<T: Pixel>(
 
   fs.qc.update(qidx, tx_size, luma_mode.is_intra(), fi.sequence.bit_depth, fi.dc_delta_q[0], 0);
 
+  cw.bc.set_tx_size(bo, tx_size);
+
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
   let (has_coeff, dist) = encode_tx_block(
     fi, fs, cw, w, 0, bo, luma_mode, tx_size, tx_type, bsize, po, skip, ac, 0, rdo_type, for_rdo_use
@@ -1505,7 +1509,6 @@ pub fn encode_block_with_modes<T: Pixel>(
 
   debug_assert!((tx_size, tx_type) ==
                 rdo_tx_size_type(fi, fs, cw, bsize, bo, mode_luma, ref_frames, mvs, skip));
-  cw.bc.set_tx_size(bo, tx_size);
 
   let mut mv_stack = Vec::new();
   let is_compound = ref_frames[1] != NONE_FRAME;
