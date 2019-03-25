@@ -2176,11 +2176,6 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
   /* TODO: Don't apply if lossless */
   deblock_filter_optimize(fi, fs, &mut cw.bc);
 
-  // NOTE(yushin): Temporarilly, disable deblocking-filter
-  // because it causes mismatch btw encoder and decoder when transform partition is enabled.
-  fs.deblock.levels[0] = 0;
-  fs.deblock.levels[1] = 0;
-
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
     deblock_filter_frame(fs, &mut cw.bc, fi.sequence.bit_depth);
   }
