@@ -164,7 +164,7 @@ impl SpeedSettings {
       reduced_tx_set: Self::reduced_tx_set_preset(speed),
       tx_domain_distortion: false, //Self::tx_domain_distortion_preset(speed),
       tx_domain_rate: Self::tx_domain_rate_preset(speed),
-      encode_bottomup: Self::encode_bottomup_preset(speed),
+      encode_bottomup: true, //Self::encode_bottomup_preset(speed),
       rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
       prediction_modes: Self::prediction_modes_preset(speed),
       include_near_mvs: Self::include_near_mvs_preset(speed),
