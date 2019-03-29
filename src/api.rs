@@ -158,11 +158,11 @@ impl Default for SpeedSettings {
 impl SpeedSettings {
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
-      min_block_size: Self::min_block_size_preset(speed),
+      min_block_size: BlockSize::BLOCK_16X16, //Self::min_block_size_preset(speed),
       multiref: Self::multiref_preset(speed),
       fast_deblock: Self::fast_deblock_preset(speed),
       reduced_tx_set: Self::reduced_tx_set_preset(speed),
-      tx_domain_distortion: Self::tx_domain_distortion_preset(speed),
+      tx_domain_distortion: false, //Self::tx_domain_distortion_preset(speed),
       tx_domain_rate: Self::tx_domain_rate_preset(speed),
       encode_bottomup: Self::encode_bottomup_preset(speed),
       rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
