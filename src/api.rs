@@ -158,7 +158,7 @@ impl Default for SpeedSettings {
 impl SpeedSettings {
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
-      min_block_size: BlockSize::BLOCK_16X16, //Self::min_block_size_preset(speed),
+      min_block_size: BlockSize::BLOCK_4X4, //Self::min_block_size_preset(speed),
       multiref: Self::multiref_preset(speed),
       fast_deblock: Self::fast_deblock_preset(speed),
       reduced_tx_set: Self::reduced_tx_set_preset(speed),
