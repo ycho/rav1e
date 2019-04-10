@@ -2054,8 +2054,11 @@ use rayon::prelude::*;
 #[inline(always)]
 fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
   assert!(!fi.sequence.use_128x128_superblock);
-  let sby_range = 0..fi.sb_height;
-  let sbx_range = 0..fi.sb_width;
+  let sb_shift = fi.sb_size_log2();
+  let tile_sb_width = ts.width.align_power_of_two_and_shift(sb_shift);
+  let tile_sb_height = ts.height.align_power_of_two_and_shift(sb_shift);
+  let sby_range = 0..tile_sb_height;
+  let sbx_range = 0..tile_sb_width;
 
   let sbos = (sby_range).flat_map(|y| {
       sbx_range.clone().map(move |x| SuperBlockOffset { x, y })
