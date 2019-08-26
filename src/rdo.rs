@@ -1752,6 +1752,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   &lrf_input.planes[pli].slice(PlaneOffset { x: 0, y: 0 }),
                   &mut lrf_output.planes[pli]
                     .mut_slice(PlaneOffset { x: 0, y: 0 }),
+                  true,
                 );
                 let err = rdo_loop_plane_error(
                   tile_sbo,
@@ -1825,6 +1826,7 @@ pub fn rdo_loop_decision<T: Pixel>(
             &cdef_plane.slice(PlaneOffset { x: 0, y: 0 }),
             cmp::min(cdef_plane.cfg.width, fi.width - ipo.x as usize),
             cmp::min(cdef_plane.cfg.height, fi.height - ipo.y as usize),
+            set == 0,
           );
           let current_lrf =
             RestorationFilter::Sgrproj { set, xqd: [xqd0, xqd1] };
@@ -1843,6 +1845,7 @@ pub fn rdo_loop_decision<T: Pixel>(
               &lrf_input.planes[pli].slice(PlaneOffset { x: 0, y: 0 }),
               &mut lrf_output.planes[pli]
                 .mut_slice(PlaneOffset { x: 0, y: 0 }),
+              set == 0,
             );
           }
           let err = rdo_loop_plane_error(
