@@ -1845,7 +1845,7 @@ pub fn rdo_loop_decision<T: Pixel>(
               &lrf_input.planes[pli].slice(PlaneOffset { x: 0, y: 0 }),
               &mut lrf_output.planes[pli]
                 .mut_slice(PlaneOffset { x: 0, y: 0 }),
-              set == 0,
+              false, //set == 0,
             );
           }
           let err = rdo_loop_plane_error(
