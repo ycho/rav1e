@@ -795,6 +795,10 @@ pub fn sgrproj_solve<T: Pixel>(
     0
   };
   {
+    let left_w = max_r + 2;
+    let right_w = max_r + 1;
+    let start_index_x = if cdeffed.x == 0 { -(left_w as isize) } else { 0 };
+
     let mut rows_iter = VertPaddedIter::new(
       cdeffed,
       cdeffed,
@@ -804,11 +808,9 @@ pub fn sgrproj_solve<T: Pixel>(
       max_r,
     )
     .map(|row: &[T]| {
-      let left_w = max_r + 2;
-      let right_w = max_r + 1;
       HorzPaddedIter::new(
         &row[..cdef_w],
-        -(left_w as isize),
+        start_index_x,
         left_w + cdef_w + right_w,
       )
     });
