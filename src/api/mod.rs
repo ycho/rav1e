@@ -296,20 +296,20 @@ impl SpeedSettings {
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       min_block_size: Self::min_block_size_preset(speed),
-      multiref: Self::multiref_preset(speed),
-      fast_deblock: Self::fast_deblock_preset(speed),
-      reduced_tx_set: Self::reduced_tx_set_preset(speed),
-      tx_domain_distortion: Self::tx_domain_distortion_preset(speed),
-      tx_domain_rate: Self::tx_domain_rate_preset(speed),
+      multiref: false,//Self::multiref_preset(speed),
+      fast_deblock: false,//Self::fast_deblock_preset(speed),
+      reduced_tx_set: false,//Self::reduced_tx_set_preset(speed),
+      tx_domain_distortion: false,//Self::tx_domain_distortion_preset(speed),
+      tx_domain_rate: false,//Self::tx_domain_rate_preset(speed),
       encode_bottomup: Self::encode_bottomup_preset(speed),
-      rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
-      prediction_modes: Self::prediction_modes_preset(speed),
-      include_near_mvs: Self::include_near_mvs_preset(speed),
-      no_scene_detection: Self::no_scene_detection_preset(speed),
+      rdo_tx_decision: false,//Self::rdo_tx_decision_preset(speed),
+      prediction_modes: PredictionModesSetting::Simple,//Self::prediction_modes_preset(speed),
+      include_near_mvs: false,//Self::include_near_mvs_preset(speed),
+      no_scene_detection: true,//Self::no_scene_detection_preset(speed),
       diamond_me: Self::diamond_me_preset(speed),
       cdef: Self::cdef_preset(speed),
-      quantizer_rdo: Self::quantizer_rdo_preset(speed),
-      use_satd_subpel: Self::use_satd_subpel(speed),
+      quantizer_rdo: false,//Self::quantizer_rdo_preset(speed),
+      use_satd_subpel: false,//Self::use_satd_subpel(speed),
     }
   }
 

@@ -218,10 +218,10 @@ impl Sequence {
       enable_ref_frame_mvs: false,
       enable_warped_motion: false,
       enable_superres: false,
-      enable_cdef: config.speed_settings.cdef
-        && config.chroma_sampling != ChromaSampling::Cs422,
-      enable_restoration: config.chroma_sampling != ChromaSampling::Cs422,
-      enable_large_lru: true,
+      enable_cdef: false,//config.speed_settings.cdef
+        //&& config.chroma_sampling != ChromaSampling::Cs422,
+      enable_restoration: false,//config.chroma_sampling != ChromaSampling::Cs422,
+      enable_large_lru: false,//true,
       operating_points_cnt_minus_1: 0,
       operating_point_idc,
       display_model_info_present_flag: false,
@@ -2434,7 +2434,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       if split_vert {
         partition_types.push(PartitionType::PARTITION_VERT);
       };
-    } else if bsize.width_log2() == fi.min_partition_size.width_log2() + 1 {
+    } /*else if bsize.width_log2() == fi.min_partition_size.width_log2() + 1 {
       partition_types.push(PartitionType::PARTITION_NONE);
       partition_types.push(PartitionType::PARTITION_SPLIT);
       partition_types.push(PartitionType::PARTITION_HORZ);
@@ -2442,7 +2442,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       if fi.sequence.chroma_sampling != ChromaSampling::Cs422 {
         partition_types.push(PartitionType::PARTITION_VERT);
       }
-    } else {
+    } */else {
       partition_types.push(PartitionType::PARTITION_NONE);
       partition_types.push(PartitionType::PARTITION_SPLIT);
     }
