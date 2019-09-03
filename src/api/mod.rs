@@ -302,7 +302,7 @@ impl SpeedSettings {
       tx_domain_distortion: false,//Self::tx_domain_distortion_preset(speed),
       tx_domain_rate: false,//Self::tx_domain_rate_preset(speed),
       encode_bottomup: Self::encode_bottomup_preset(speed),
-      rdo_tx_decision: false,//Self::rdo_tx_decision_preset(speed),
+      rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
       prediction_modes: PredictionModesSetting::Simple,//Self::prediction_modes_preset(speed),
       include_near_mvs: false,//Self::include_near_mvs_preset(speed),
       no_scene_detection: true,//Self::no_scene_detection_preset(speed),
