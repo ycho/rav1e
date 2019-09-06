@@ -418,7 +418,7 @@ impl SpeedSettings {
   }
 
   fn rdo_tx_decision_preset(speed: usize) -> bool {
-    speed <= 3
+    false//speed <= 3
   }
 
   fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
