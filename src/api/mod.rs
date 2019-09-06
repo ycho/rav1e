@@ -379,7 +379,7 @@ impl SpeedSettings {
     let min_block_size = if speed == 0 {
       BlockSize::BLOCK_4X4
     } else if speed <= 8 {
-      BlockSize::BLOCK_8X8
+      BlockSize::BLOCK_4X4
     } else {
       BlockSize::BLOCK_64X64
     };
