@@ -509,9 +509,9 @@ pub fn rdo_tx_size_type<T: Pixel>(
   let mut best_rd = std::f64::MAX;
   let is_inter = !luma_mode.is_intra();
 
-  let do_rdo_tx_size = fi.tx_mode_select
+  let do_rdo_tx_size = false;/*fi.tx_mode_select
     && fi.config.speed_settings.rdo_tx_decision
-    && luma_mode.is_intra();
+    && luma_mode.is_intra();*/
   let rdo_tx_depth = if do_rdo_tx_size { 2 } else { 0 };
   let cw_checkpoint = cw.checkpoint();
 
