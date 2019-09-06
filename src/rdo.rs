@@ -518,9 +518,9 @@ pub fn rdo_tx_size_type<T: Pixel>(
   for _ in 0..=rdo_tx_depth {
     let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
 
-    let do_rdo_tx_type = tx_set > TxSet::TX_SET_DCTONLY
+    let do_rdo_tx_type = false;/*tx_set > TxSet::TX_SET_DCTONLY
       && fi.config.speed_settings.rdo_tx_decision
-      && !skip;
+      && !skip;*/
 
     if !do_rdo_tx_size && !do_rdo_tx_type {
       return (best_tx_size, best_tx_type);
