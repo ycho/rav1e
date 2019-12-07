@@ -1171,7 +1171,7 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     // Compute the block importances for the current output frame.
-    self.compute_block_importances();
+    //self.compute_block_importances();
 
     let cur_output_frameno = self.output_frameno;
 

@@ -158,7 +158,7 @@ impl EncoderConfig {
       tile_cols: 0,
       tile_rows: 0,
       tiles: 0,
-      rdo_lookahead_frames: 40,
+      rdo_lookahead_frames: 0,
       speed_settings: SpeedSettings::from_preset(speed),
       show_psnr: false,
     }
