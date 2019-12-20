@@ -1121,7 +1121,7 @@ pub fn encode_tx_block<T: Pixel>(
   rdo_type: RDOType,
   need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
-  let qidx = get_qidx(fi, ts, cw, tile_bo);
+  let qidx = get_qidx(fi, ts, cw, tile_partition_bo);
   assert_ne!(qidx, 0); // lossless is not yet supported
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
