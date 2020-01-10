@@ -1693,7 +1693,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
       if fi.is_filter_switchable
         && ContextWriter::needs_interp_filter(bsize, luma_mode)
       {
-        cw.write_interp_filter(w, tile_bo, bsize, 0, FilterMode::REGULAR);
+        cw.write_interp_filter(w, tile_bo, bsize, 0, fi.default_filter);
       }
     } else {
       cw.write_intra_mode(w, bsize, luma_mode);
