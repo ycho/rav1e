@@ -1074,6 +1074,7 @@ fn diff<T: Pixel>(
   {
     for ((r, v1), v2) in l.iter_mut().zip(s1).zip(s2) {
       *r = i16::cast_from(*v1) - i16::cast_from(*v2);
+      debug_assert!(-255 <= *r && *r <= 255)
     }
   }
 }
@@ -1126,6 +1127,9 @@ pub fn encode_tx_block<T: Pixel>(
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
   let area = Area::BlockStartingAt { bo: tx_bo.0 };
+
+  debug_assert!(tx_bo.0.x < ts.mi_width);
+  debug_assert!(tx_bo.0.y < ts.mi_height);
 
   debug_assert!(
     tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT
@@ -1784,7 +1788,13 @@ pub fn encode_block_post_cdef<T: Pixel>(
 
   if fi.sequence.enable_intra_edge_filter {
     for y in 0..bsize.height_mi() {
+      if tile_bo.0.y + y >= ts.mi_height {
+        continue;
+      }
       for x in 0..bsize.width_mi() {
+        if tile_bo.0.x + x >= ts.mi_width {
+          continue;
+        }
         let bi = &mut ts.coded_block_info[tile_bo.0.y + y][tile_bo.0.x + x];
         bi.luma_mode = luma_mode;
         bi.chroma_mode = chroma_mode;
@@ -2064,6 +2074,9 @@ pub fn write_tx_tree<T: Pixel>(
         x: tile_bo.0.x + bx * tx_size.width_mi(),
         y: tile_bo.0.y + by * tx_size.height_mi(),
       });
+      if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
+        continue;
+      }
 
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
       let (has_coeff, dist) = encode_tx_block(
@@ -2073,8 +2086,8 @@ pub fn write_tx_tree<T: Pixel>(
         w,
         0,
         tile_bo,
-        0,
-        0,
+        bx,
+        by,
         tx_bo,
         luma_mode,
         tx_size,
@@ -2134,6 +2147,9 @@ pub fn write_tx_tree<T: Pixel>(
             y: tile_bo.0.y + ((by * uv_tx_size.height_mi()) << ydec)
               - (max_tx_size.height_mi() == 1) as usize * ydec,
           });
+          if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
+            continue;
+          }
 
           let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
           po.x += (bx * uv_tx_size.width()) as isize;
@@ -2534,18 +2550,17 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
     return;
   }
-  let bsw = bsize.width_mi();
-  let bsh = bsize.height_mi();
   let is_square = bsize.is_sqr();
   let rdo_type = RDOType::PixelDistRealRate;
+  let hbs = bsize.width_mi() >> 1;
+  let has_cols = tile_bo.0.x + hbs < ts.mi_width; // has more than half block size inside frame
+  let has_rows = tile_bo.0.y + hbs < ts.mi_height;
 
   // TODO: Update for 128x128 superblocks
   assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
-  // Always split if the current partition is too large, i.e. right or bottom tile border
-  let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width
-    || tile_bo.0.y + bsh as usize > ts.mi_height
-    || bsize > fi.partition_range.max)
-    && is_square;
+
+  let must_split =
+    bsize > fi.partition_range.max && is_square && (!has_cols || !has_rows);
 
   let mut rdo_output =
     block_output.clone().unwrap_or(PartitionGroupParameters {
@@ -2554,27 +2569,8 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       part_modes: ArrayVec::new(),
     });
   let partition: PartitionType;
-  let mut split_vert = false;
-  let mut split_horz = false;
-  if must_split {
-    let cbw = (ts.mi_width - tile_bo.0.x).min(bsw); // clipped block width, i.e. having effective pixels
-    let cbh = (ts.mi_height - tile_bo.0.y).min(bsh);
 
-    if cbw == bsw / 2
-      && cbh == bsh
-      && fi.sequence.chroma_sampling != ChromaSampling::Cs422
-    {
-      split_vert = true;
-    }
-    if cbh == bsh / 2 && cbw == bsw {
-      split_horz = true;
-    }
-  }
-
-  if must_split && (!split_vert && !split_horz) {
-    // Oversized blocks are split automatically
-    partition = PartitionType::PARTITION_SPLIT;
-  } else if (must_split || (bsize > fi.partition_range.min && is_square))
+  if (must_split || (bsize > fi.partition_range.min && is_square))
     && (
       // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
       !fi.frame_type.has_inter()
@@ -2585,17 +2581,10 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     debug_assert!(bsize.is_sqr());
     // Blocks of sizes within the supported range are subjected to a partitioning decision
     let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
-    if must_split {
-      partition_types.push(PartitionType::PARTITION_SPLIT);
-      if split_horz {
-        partition_types.push(PartitionType::PARTITION_HORZ);
-      };
-      if split_vert {
-        partition_types.push(PartitionType::PARTITION_VERT);
-      };
-    } else {
+
+    partition_types.push(PartitionType::PARTITION_SPLIT);
+    if !must_split {
       partition_types.push(PartitionType::PARTITION_NONE);
-      partition_types.push(PartitionType::PARTITION_SPLIT);
     }
     rdo_output = rdo_partition_decision(
       fi,
@@ -2612,6 +2601,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       inter_cfg,
     );
     partition = rdo_output.part_type;
+  //partition = PartitionType::PARTITION_SPLIT;
   } else {
     // Blocks of sizes below the supported range are encoded directly
     partition = PartitionType::PARTITION_NONE;
@@ -2624,7 +2614,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   let subsize = bsize.subsize(partition);
 
-  if bsize >= BlockSize::BLOCK_8X8 && is_square {
+  if bsize >= BlockSize::BLOCK_8X8 && is_square && (has_cols && has_rows) {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     cw.write_partition(w, tile_bo, partition, bsize);
   }
