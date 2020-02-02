@@ -24,6 +24,7 @@ use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::PredictionMode;
 use crate::predict::PredictionMode::*;
+use crate::rdo::clip_visible_bsize;
 use crate::scan_order::*;
 use crate::tiling::*;
 use crate::token_cdfs::*;
@@ -2273,6 +2274,10 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, bsize: BlockSize,
     tx_size: TxSize, txfm_split: bool, tbx: usize, tby: usize, depth: usize,
   ) {
+    if bo.0.x >= self.bc.blocks.cols() || bo.0.y >= self.bc.blocks.rows() {
+      return;
+    }
+
     debug_assert!(self.bc.blocks[bo].is_inter());
     debug_assert!(bsize > BlockSize::BLOCK_4X4);
     debug_assert!(!tx_size.is_rect() || bsize.is_rect_tx_allowed());
@@ -3066,8 +3071,15 @@ impl<'a> ContextWriter<'a> {
     });
     // clamp mvs
     for mv in mv_stack {
-      let blk_w = bsize.width();
-      let blk_h = bsize.height();
+      //let blk_w = bsize.width();
+      //let blk_h = bsize.height();
+      let (blk_w, blk_h) = clip_visible_bsize(
+        (fi.width + 3) >> 2,
+        (fi.height + 3) >> 2,
+        bsize,
+        frame_bo.0.x,
+        frame_bo.0.y,
+      );
       let border_w = 128 + blk_w as isize * 8;
       let border_h = 128 + blk_h as isize * 8;
       let mvx_min =

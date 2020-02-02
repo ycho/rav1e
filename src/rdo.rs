@@ -283,6 +283,20 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
   sse
 }
 
+pub fn clip_visible_bsize(
+  w: usize, h: usize, bsize: BlockSize, x: usize, y: usize,
+) -> (usize, usize) {
+  let mut visible_w: usize =
+    if x + bsize.width_mi() > w { w - x } else { bsize.width_mi() };
+  let mut visible_h: usize =
+    if y + bsize.height_mi() > h { h - y } else { bsize.height_mi() };
+
+  visible_w *= 4;
+  visible_h *= 4;
+
+  (visible_w, visible_h)
+}
+
 // Compute the pixel-domain distortion for an encode
 fn compute_distortion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
@@ -291,13 +305,22 @@ fn compute_distortion<T: Pixel>(
   let area = Area::BlockStartingAt { bo: tile_bo.0 };
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
+  // clipped wxh, when on the frame border
+  let (visible_w, visible_h) = clip_visible_bsize(
+    ts.mi_width,
+    ts.mi_height,
+    bsize,
+    tile_bo.0.x,
+    tile_bo.0.y,
+  );
+
   let mut distortion = match fi.config.tune {
     Tune::Psychovisual if bsize.width() >= 8 && bsize.height() >= 8 => {
       cdef_dist_wxh(
         &input_region,
         &rec_region,
-        bsize.width(),
-        bsize.height(),
+        visible_w,
+        visible_h,
         fi.sequence.bit_depth,
         |bias_area, bsize| {
           distortion_scale(
@@ -311,8 +334,8 @@ fn compute_distortion<T: Pixel>(
     Tune::Psnr | Tune::Psychovisual => sse_wxh(
       &input_region,
       &rec_region,
-      bsize.width(),
-      bsize.height(),
+      visible_w,
+      visible_h,
       |bias_area, bsize| {
         distortion_scale(
           fi,
@@ -327,8 +350,8 @@ fn compute_distortion<T: Pixel>(
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
     let mask = !(MI_SIZE - 1);
-    let mut w_uv = (bsize.width() >> xdec) & mask;
-    let mut h_uv = (bsize.height() >> ydec) & mask;
+    let mut w_uv = (visible_w >> xdec) & mask;
+    let mut h_uv = (visible_h >> ydec) & mask;
 
     if (w_uv == 0 || h_uv == 0) && is_chroma_block {
       w_uv = MI_SIZE;
@@ -684,6 +707,10 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 
   let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
 
+  let hbs = bsize.width_mi() >> 1;
+  let has_cols = tile_bo.0.x + hbs < ts.mi_width; // has more than half block size inside frame
+  let has_rows = tile_bo.0.y + hbs < ts.mi_height;
+
   // Find the best chroma prediction mode for the current luma prediction mode
   let mut chroma_rdo = |skip: bool| -> bool {
     let mut zero_distortion = false;
@@ -710,7 +737,10 @@ fn luma_chroma_mode_rdo<T: Pixel>(
         let wr = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
-        if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
+        if bsize >= BlockSize::BLOCK_8X8
+          && bsize.is_sqr()
+          && (has_cols && has_rows)
+        {
           cw.write_partition(
             wr,
             tile_bo,
@@ -803,7 +833,6 @@ pub fn rdo_mode_decision<T: Pixel>(
   pmv_idxs: (usize, usize), inter_cfg: &InterConfig,
 ) -> PartitionParameters {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-
   let cw_checkpoint = cw.checkpoint();
 
   let rdo_type = if fi.use_tx_domain_rate {
@@ -1644,7 +1673,11 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
 
   debug_assert!(subsize != BlockSize::BLOCK_INVALID);
 
-  let cost = if bsize >= BlockSize::BLOCK_8X8 {
+  let hbs = bsize.width_mi() >> 1;
+  let has_cols = tile_bo.0.x + hbs < ts.mi_width; // has more than half block size inside frame
+  let has_rows = tile_bo.0.y + hbs < ts.mi_height;
+
+  let cost = if bsize >= BlockSize::BLOCK_8X8 && (has_cols || has_rows) {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     let tell = w.tell_frac();
     cw.write_partition(w, tile_bo, partition, bsize);

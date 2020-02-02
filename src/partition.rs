@@ -590,9 +590,13 @@ pub fn get_intra_edges<T: Pixel>(
     // Needs left
     if needs_left {
       if x != 0 {
-        for i in 0..tx_size.height() {
-          left[2 * MAX_TX_SIZE - tx_size.height() + i] =
-            dst[y + tx_size.height() - 1 - i][x - 1];
+        let txh = if y + tx_size.height() >= dst.rect().height {
+          y + tx_size.height() - dst.rect().height
+        } else {
+          tx_size.height()
+        };
+        for i in 0..txh {
+          left[2 * MAX_TX_SIZE - txh + i] = dst[y + txh - 1 - i][x - 1];
         }
       } else {
         let val = if y != 0 { dst[y - 1][0] } else { T::cast_from(base + 1) };
@@ -605,8 +609,12 @@ pub fn get_intra_edges<T: Pixel>(
     // Needs top
     if needs_top {
       if y != 0 {
-        above[..tx_size.width()]
-          .copy_from_slice(&dst[y - 1][x..x + tx_size.width()]);
+        let txw = if x + tx_size.width() >= dst.rect().width {
+          x + tx_size.width() - dst.rect().width
+        } else {
+          tx_size.width()
+        };
+        above[..txw].copy_from_slice(&dst[y - 1][x..x + txw]);
       } else {
         let val = if x != 0 { dst[0][x - 1] } else { T::cast_from(base - 1) };
         for v in above[..tx_size.width()].iter_mut() {
