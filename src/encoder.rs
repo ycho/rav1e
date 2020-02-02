@@ -1966,7 +1966,13 @@ pub fn write_tx_blocks<T: Pixel>(
     } else {
       uv_intra_mode_to_tx_type_context(chroma_mode)
     };
+    if uv_tx_type == TxType::FLIPADST_FLIPADST {
+      let _test = true;
+    }
 
+    if uv_tx_type == TxType::V_DCT || uv_tx_type == TxType::H_DCT {
+      let _test = true;
+    }
     for p in 1..3 {
       ts.qc.update(
         qidx,
@@ -2111,8 +2117,24 @@ pub fn write_tx_tree<T: Pixel>(
   bh_uv /= uv_tx_size.height_mi();
 
   if bw_uv > 0 && bh_uv > 0 {
-    let uv_tx_type =
+    let mut uv_tx_type =
       if partition_has_coeff { tx_type } else { TxType::DCT_DCT }; // if inter mode, uv_tx_type == tx_type
+      if uv_tx_type == TxType::FLIPADST_FLIPADST {
+        let _test = true;
+      }
+
+    if uv_tx_type != TxType::DCT_DCT {
+      let tx_set = get_tx_set(uv_tx_size, true, fi.use_reduced_tx_set);
+      if tx_set != TxSet::TX_SET_INTER_3 && tx_set != TxSet::TX_SET_DCTONLY {
+        let _test = true;
+      }
+      if uv_tx_type == TxType::V_DCT || uv_tx_type == TxType::H_DCT {
+        let _test = true;
+      }
+      if av1_tx_used[tx_set as usize][uv_tx_type as usize] == 0 {
+        uv_tx_type = TxType::DCT_DCT;
+      };
+    }
 
     for p in 1..3 {
       ts.qc.update(
