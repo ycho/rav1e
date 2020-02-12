@@ -2581,11 +2581,28 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let has_cols = tile_bo.0.x + hbs < ts.mi_width; // has more than half block size inside frame
   let has_rows = tile_bo.0.y + hbs < ts.mi_height;
 
+  if tile_bo.0.y + hbs*2 > ts.mi_height {
+    let _test_y = true;
+  }
+
+  if tile_bo.0.x + hbs*2 > ts.mi_width {
+    let _test_x = true;
+  }
+
   // TODO: Update for 128x128 superblocks
   assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
 
   let must_split =
-    bsize > fi.partition_range.max && is_square && (!has_cols || !has_rows);
+    is_square && (bsize > fi.partition_range.max || !has_cols || !has_rows);
+
+  let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
+    if fi.frame_type.has_inter() &&
+      fi.config.chroma_sampling != ChromaSampling::Cs420 &&
+      bsize <= BlockSize::BLOCK_8X8 {
+      false
+    } else {
+      (bsize > fi.partition_range.min && is_square) || must_split
+    };
 
   let mut rdo_output =
     block_output.clone().unwrap_or(PartitionGroupParameters {
@@ -2595,14 +2612,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     });
   let partition: PartitionType;
 
-  if (must_split || (bsize > fi.partition_range.min && is_square))
-    && (
-      // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
-      !fi.frame_type.has_inter()
-        || fi.config.chroma_sampling == ChromaSampling::Cs420
-        || bsize > BlockSize::BLOCK_8X8
-    )
-  {
+  if can_split {
     debug_assert!(bsize.is_sqr());
     // Blocks of sizes within the supported range are subjected to a partitioning decision
     let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
@@ -2626,7 +2636,6 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       inter_cfg,
     );
     partition = rdo_output.part_type;
-  //partition = PartitionType::PARTITION_SPLIT;
   } else {
     // Blocks of sizes below the supported range are encoded directly
     partition = PartitionType::PARTITION_NONE;
@@ -2639,7 +2648,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   let subsize = bsize.subsize(partition);
 
-  if bsize >= BlockSize::BLOCK_8X8 && is_square && (has_cols && has_rows) {
+  if bsize >= BlockSize::BLOCK_8X8 && is_square && (has_cols || has_rows) {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     cw.write_partition(w, tile_bo, partition, bsize);
   }
