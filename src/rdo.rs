@@ -844,6 +844,8 @@ pub fn rdo_mode_decision<T: Pixel>(
   };
 
   let mut best = if fi.frame_type.has_inter() {
+    assert!(fi.frame_type != FrameType::KEY);
+
     inter_frame_rdo_mode_decision(
       fi,
       ts,
