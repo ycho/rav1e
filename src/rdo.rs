@@ -888,7 +888,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     );
   }
 
-  if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
+  /*if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
@@ -969,7 +969,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         cw.rollback(&cw_checkpoint);
       }
     }
-  }
+  }*/
 
   cw.bc.blocks.set_mode(tile_bo, bsize, best.pred_mode_luma);
   cw.bc.blocks.set_ref_frames(tile_bo, bsize, best.ref_frames);
@@ -1467,6 +1467,13 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
   debug_assert!(bsize.subsampled_size(xdec, ydec) == uv_tx_size.block_size());
 
+  let (visible_w, visible_h) = clip_visible_bsize(
+    ts.mi_width,
+    ts.mi_height,
+    bsize,
+    tile_bo.0.x,
+    tile_bo.0.y,
+  );
   let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
   luma_ac(&mut ac.data, ts, tile_bo, bsize);
   let best_alpha: ArrayVec<[i16; 2]> = (1..3)
@@ -1506,8 +1513,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
         sse_wxh(
           &input.subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
           &rec_region.as_const(),
-          uv_tx_size.width(),
-          uv_tx_size.height(),
+          visible_w >> xdec,
+          visible_h >> ydec,
           |_, _| DistortionScale::default(), // We're not doing RDO here.
         )
         .0
@@ -1677,7 +1684,7 @@ pub fn get_sub_partitions(
 
 pub fn get_sub_partitions_with_border_check(
   four_partitions: &[TileBlockOffset; 4], partition: PartitionType,
-  mi_width: usize, mi_height: usize, subsize: BlockSize,
+  mi_width: usize, mi_height: usize,
 ) -> ArrayVec<[TileBlockOffset; 4]> {
   let mut partition_offsets = ArrayVec::<[TileBlockOffset; 4]>::new();
 
@@ -1687,26 +1694,23 @@ pub fn get_sub_partitions_with_border_check(
     return partition_offsets;
   }
 
-  let hbsw = subsize.width_mi(); // Half the block size width in blocks
-  let hbsh = subsize.height_mi(); // Half the block size height in blocks
-
   if (partition == PARTITION_VERT || partition == PARTITION_SPLIT)
-    && four_partitions[1].0.x + hbsw <= mi_width
-    && four_partitions[1].0.y + hbsh <= mi_height
+    && four_partitions[1].0.x < mi_width
+    && four_partitions[1].0.y < mi_height
   {
     partition_offsets.push(four_partitions[1]);
   };
 
   if (partition == PARTITION_HORZ || partition == PARTITION_SPLIT)
-    && four_partitions[2].0.x + hbsw <= mi_width
-    && four_partitions[2].0.y + hbsh <= mi_height
+    && four_partitions[2].0.x < mi_width
+    && four_partitions[2].0.y < mi_height
   {
     partition_offsets.push(four_partitions[2]);
   };
 
   if partition == PARTITION_SPLIT
-    && four_partitions[3].0.x + hbsw <= mi_width
-    && four_partitions[3].0.y + hbsh <= mi_height
+    && four_partitions[3].0.x < mi_width
+    && four_partitions[3].0.y < mi_height
   {
     partition_offsets.push(four_partitions[3]);
   };
@@ -1795,7 +1799,6 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
     partition,
     ts.mi_width,
     ts.mi_height,
-    subsize,
   );
 
   let pmv_idxs = partitions
@@ -1812,6 +1815,11 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   let mut rd_cost_sum = 0.0;
 
   for (&offset, pmv_inner_idx) in partitions.iter().zip(pmv_idxs) {
+    let hbs = subsize.width_mi() >> 1;
+    let has_cols = offset.0.x + hbs < ts.mi_width; // has more than half block size inside frame
+    let has_rows = offset.0.y + hbs < ts.mi_height;
+
+    if has_cols && has_rows {
     let mode_decision = rdo_mode_decision(
       fi,
       ts,
@@ -1827,7 +1835,6 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
     if fi.enable_early_exit && rd_cost_sum > best_rd {
       return None;
     }
-
     if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
       let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
       cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
@@ -1845,6 +1852,10 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       false,
     );
     child_modes.push(mode_decision);
+    } else {
+      //rd_cost_sum += std::f64::MAX;
+      return None;
+    }
   }
 
   Some(cost + rd_cost_sum)
