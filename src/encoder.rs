@@ -1850,6 +1850,14 @@ pub fn luma_ac<T: Pixel>(
   bsize: BlockSize,
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
+  let (visible_w, visible_h) = clip_visible_bsize(
+    ts.mi_width,
+    ts.mi_height,
+    bsize,
+    tile_bo.0.x,
+    tile_bo.0.y,
+  );
+  let (plane_visible_w, plane_visible_h) = (visible_w >> xdec, visible_h >> ydec);
   let plane_bsize = bsize.subsampled_size(xdec, ydec);
   let bo = if bsize.is_sub8x8(xdec, ydec) {
     let offset = bsize.sub8x8_offset(xdec, ydec);
@@ -1861,8 +1869,8 @@ pub fn luma_ac<T: Pixel>(
   let luma = &rec.subregion(Area::BlockStartingAt { bo: bo.0 });
 
   let mut sum: i32 = 0;
-  for sub_y in 0..plane_bsize.height() {
-    for sub_x in 0..plane_bsize.width() {
+  for sub_y in 0..plane_visible_h {
+    for sub_x in 0..plane_visible_w {
       let y = sub_y << ydec;
       let x = sub_x << xdec;
       let mut sample: i16 = i16::cast_from(luma[y][x]);
@@ -1879,10 +1887,11 @@ pub fn luma_ac<T: Pixel>(
       sum += sample as i32;
     }
   }
-  let shift = plane_bsize.width_log2() + plane_bsize.height_log2();
-  let average = ((sum + (1 << (shift - 1))) >> shift) as i16;
-  for sub_y in 0..plane_bsize.height() {
-    for sub_x in 0..plane_bsize.width() {
+  //let shift = plane_bsize.width_log2() + plane_bsize.height_log2();
+  //let average = ((sum + (1 << (shift - 1))) >> shift) as i16;
+  let average = (sum / (plane_visible_w * plane_visible_h) as i32) as i16;
+  for sub_y in 0..plane_visible_h {
+    for sub_x in 0..plane_visible_w {
       ac[sub_y * plane_bsize.width() + sub_x] -= average;
     }
   }
@@ -2559,11 +2568,12 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   if tile_bo.0.y + hbs*2 > ts.mi_height {
     let _test_y = true;
   }
-
   if tile_bo.0.x + hbs*2 > ts.mi_width {
     let _test_x = true;
   }
-
+  if tile_bo.0.y + hbs*2 > ts.mi_height && tile_bo.0.x + hbs*2 > ts.mi_width {
+    let _test_yx = true;
+  }
   // TODO: Update for 128x128 superblocks
   assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
 
@@ -2587,7 +2597,9 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     });
   let partition: PartitionType;
 
-  if can_split {
+  if must_split {
+    partition = PartitionType::PARTITION_SPLIT;
+  } else if can_split {
     debug_assert!(bsize.is_sqr());
     // Blocks of sizes within the supported range are subjected to a partitioning decision
     let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
