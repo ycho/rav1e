@@ -1857,7 +1857,8 @@ pub fn luma_ac<T: Pixel>(
     tile_bo.0.x,
     tile_bo.0.y,
   );
-  let (plane_visible_w, plane_visible_h) = (visible_w >> xdec, visible_h >> ydec);
+  let (plane_visible_w, plane_visible_h) =
+    (visible_w >> xdec, visible_h >> ydec);
   let plane_bsize = bsize.subsampled_size(xdec, ydec);
   let bo = if bsize.is_sub8x8(xdec, ydec) {
     let offset = bsize.sub8x8_offset(xdec, ydec);
@@ -2565,13 +2566,15 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let has_cols = tile_bo.0.x + hbs < ts.mi_width; // has more than half block size inside frame
   let has_rows = tile_bo.0.y + hbs < ts.mi_height;
 
-  if tile_bo.0.y + hbs*2 > ts.mi_height {
+  if tile_bo.0.y + hbs * 2 > ts.mi_height {
     let _test_y = true;
   }
-  if tile_bo.0.x + hbs*2 > ts.mi_width {
+  if tile_bo.0.x + hbs * 2 > ts.mi_width {
     let _test_x = true;
   }
-  if tile_bo.0.y + hbs*2 > ts.mi_height && tile_bo.0.x + hbs*2 > ts.mi_width {
+  if tile_bo.0.y + hbs * 2 > ts.mi_height
+    && tile_bo.0.x + hbs * 2 > ts.mi_width
+  {
     let _test_yx = true;
   }
   // TODO: Update for 128x128 superblocks
