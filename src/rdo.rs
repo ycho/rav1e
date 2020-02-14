@@ -1407,7 +1407,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     );
   });
 
-  if fi.config.speed_settings.fine_directional_intra
+  /*if fi.config.speed_settings.fine_directional_intra
     && bsize >= BlockSize::BLOCK_8X8
   {
     // Find the best angle delta for the current best prediction mode
@@ -1454,7 +1454,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
         if chroma_deltas == 1 { 0 } else { j - MAX_ANGLE_DELTA as i8 };
       angle_delta_rdo(best_angle_delta_y, angle_delta_uv);
     }
-  }
+  }*/
 
   best
 }
@@ -1820,38 +1820,39 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
     let has_rows = offset.0.y + hbs < ts.mi_height;
 
     if has_cols && has_rows {
-    let mode_decision = rdo_mode_decision(
-      fi,
-      ts,
-      cw,
-      subsize,
-      offset,
-      (pmv_idx, pmv_inner_idx),
-      inter_cfg,
-    );
+      let mode_decision = rdo_mode_decision(
+        fi,
+        ts,
+        cw,
+        subsize,
+        offset,
+        (pmv_idx, pmv_inner_idx),
+        inter_cfg,
+      );
 
-    rd_cost_sum += mode_decision.rd_cost;
+      rd_cost_sum += mode_decision.rd_cost;
 
-    if fi.enable_early_exit && rd_cost_sum > best_rd {
-      return None;
-    }
-    if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
-      let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
-      cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
-    }
-    encode_block_with_modes(
-      fi,
-      ts,
-      cw,
-      w_pre_cdef,
-      w_post_cdef,
-      subsize,
-      offset,
-      &mode_decision,
-      rdo_type,
-      false,
-    );
-    child_modes.push(mode_decision);
+      if fi.enable_early_exit && rd_cost_sum > best_rd {
+        return None;
+      }
+      if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
+        let w: &mut W =
+          if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
+        cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
+      }
+      encode_block_with_modes(
+        fi,
+        ts,
+        cw,
+        w_pre_cdef,
+        w_post_cdef,
+        subsize,
+        offset,
+        &mode_decision,
+        rdo_type,
+        false,
+      );
+      child_modes.push(mode_decision);
     } else {
       //rd_cost_sum += std::f64::MAX;
       return None;
