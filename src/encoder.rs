@@ -1169,6 +1169,7 @@ pub fn encode_tx_block<T: Pixel>(
       fi.sequence.enable_intra_edge_filter,
       pred_intra_param,
     );
+    use crate::cpu_features::CpuFeatureLevel;
     mode.predict_intra(
       tile_rect,
       &mut rec.subregion_mut(area),
@@ -1178,7 +1179,7 @@ pub fn encode_tx_block<T: Pixel>(
       pred_intra_param,
       ief_params,
       &edge_buf,
-      fi.cpu_feature_level,
+      CpuFeatureLevel::NATIVE, //fi.cpu_feature_level,
     );
   }
 
@@ -2634,7 +2635,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   assert!(
     PartitionType::PARTITION_NONE <= partition
-      && partition < PartitionType::PARTITION_INVALID
+      && partition < PartitionType::PARTITION_INVALID, "partition = {:?}", partition
   );
 
   let subsize = bsize.subsize(partition);
@@ -2642,6 +2643,10 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   if bsize >= BlockSize::BLOCK_8X8 && is_square && (has_cols || has_rows) {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     cw.write_partition(w, tile_bo, partition, bsize);
+  }
+
+  if tile_bo.0.y + hbs*2 > ts.mi_height && partition != PartitionType::PARTITION_NONE {
+    let _test_y = true;
   }
 
   match partition {
