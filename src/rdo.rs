@@ -832,7 +832,9 @@ fn luma_chroma_mode_rdo<T: Pixel>(
     if !luma_mode_is_intra { chroma_rdo(true) } else { false };
   // early skip
   if !zero_distortion {
-    chroma_rdo(false);
+    //chroma_rdo(false);
+    // test
+    if !luma_mode_is_intra || tile_bo.0.y < 80 { chroma_rdo(false); }
   }
 }
 
