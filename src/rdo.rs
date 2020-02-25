@@ -707,9 +707,8 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 
   let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
 
-  let hbs = bsize.width_mi() >> 1;
-  let has_cols = tile_bo.0.x + hbs < ts.mi_width; // has more than half block size inside frame
-  let has_rows = tile_bo.0.y + hbs < ts.mi_height;
+  let frame_w_mi = ts.mi_width;
+  let frame_h_mi = ts.mi_height;
 
   // Find the best chroma prediction mode for the current luma prediction mode
   let mut chroma_rdo = |skip: bool| -> bool {
@@ -737,10 +736,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
         let wr = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
-        if bsize >= BlockSize::BLOCK_8X8
-          && bsize.is_sqr()
-          && (has_cols && has_rows)
-        {
+        if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
           cw.write_partition(
             wr,
             tile_bo,
@@ -817,14 +813,34 @@ fn luma_chroma_mode_rdo<T: Pixel>(
     zero_distortion
   };
 
-  // Don't skip when using intra modes
-  let zero_distortion =
-    if !luma_mode_is_intra { chroma_rdo(true) } else { false };
-  // early skip
+  /*
+    // Don't skip when using intra modes
+    let zero_distortion =
+      if !luma_mode_is_intra { chroma_rdo(true) } else { false };
+    // early skip
+    if !zero_distortion {
+      chroma_rdo(false);
+    }
+  */
+
+  // For DEBUG/TEST: if a partition straddle on right or bottom frame border, rdo encode skip = true case only.
+  let zero_distortion = if !luma_mode_is_intra
+    || (luma_mode_is_intra
+      && (tile_bo.0.y + bsize.height_mi() > frame_h_mi
+        || tile_bo.0.x + bsize.width_mi() > frame_w_mi))
+  {
+    chroma_rdo(true)
+  } else {
+    false
+  };
+
   if !zero_distortion {
-    //chroma_rdo(false);
-    // test
-    if !luma_mode_is_intra || tile_bo.0.y < 80 { chroma_rdo(false); }
+    if !luma_mode_is_intra
+      || (tile_bo.0.y + bsize.height_mi() <= frame_h_mi
+        && tile_bo.0.x + bsize.width_mi() <= frame_w_mi)
+    {
+      chroma_rdo(false);
+    }
   }
 }
 
@@ -1683,11 +1699,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
 
   debug_assert!(subsize != BlockSize::BLOCK_INVALID);
 
-  let hbs = bsize.width_mi() >> 1;
-  let has_cols = tile_bo.0.x + hbs < ts.mi_width; // has more than half block size inside frame
-  let has_rows = tile_bo.0.y + hbs < ts.mi_height;
-
-  let cost = if bsize >= BlockSize::BLOCK_8X8 && (has_cols || has_rows) {
+  let cost = if bsize >= BlockSize::BLOCK_8X8 {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     let tell = w.tell_frac();
     cw.write_partition(w, tile_bo, partition, bsize);
