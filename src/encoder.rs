@@ -2592,6 +2592,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let has_cols = tile_bo.0.x + hbs < ts.mi_width; // has more than half block size inside frame
   let has_rows = tile_bo.0.y + hbs < ts.mi_height;
 
+  // For DEBUG/TEST
   if tile_bo.0.y + hbs * 2 > ts.mi_height {
     let _test_y = true;
   }
@@ -2603,6 +2604,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   {
     let _test_yx = true;
   }
+
   // TODO: Update for 128x128 superblocks
   assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
 
@@ -2659,16 +2661,16 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   assert!(
     PartitionType::PARTITION_NONE <= partition
-      && partition < PartitionType::PARTITION_INVALID, "partition = {:?}", partition
+      && partition < PartitionType::PARTITION_INVALID
   );
 
   let subsize = bsize.subsize(partition);
 
-  if bsize >= BlockSize::BLOCK_8X8 && is_square && (has_cols || has_rows) {
+  if bsize >= BlockSize::BLOCK_8X8 && is_square {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     cw.write_partition(w, tile_bo, partition, bsize);
   }
-  
+
   match partition {
     PartitionType::PARTITION_NONE => {
       let part_decision = if !rdo_output.part_modes.is_empty() {
