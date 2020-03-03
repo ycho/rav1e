@@ -307,8 +307,8 @@ fn compute_distortion<T: Pixel>(
   let rec_region = ts.rec.planes[0].subregion(area);
   // clipped wxh, when on the frame border
   let (visible_w, visible_h) = clip_visible_bsize(
-    ts.mi_width,
-    ts.mi_height,
+    (ts.width + 3) >> 2,
+    (ts.height + 3) >> 2,
     bsize,
     tile_bo.0.x,
     tile_bo.0.y,
@@ -813,7 +813,6 @@ fn luma_chroma_mode_rdo<T: Pixel>(
     zero_distortion
   };
 
-  /*
     // Don't skip when using intra modes
     let zero_distortion =
       if !luma_mode_is_intra { chroma_rdo(true) } else { false };
@@ -821,8 +820,8 @@ fn luma_chroma_mode_rdo<T: Pixel>(
     if !zero_distortion {
       chroma_rdo(false);
     }
-  */
 
+/*
   // For DEBUG/TEST: if a partition straddle on right or bottom frame border, rdo encode skip = true case only.
   let zero_distortion = if !luma_mode_is_intra
     || (luma_mode_is_intra
@@ -842,6 +841,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
       chroma_rdo(false);
     }
   }
+  */
 }
 
 // RDO-based mode decision
@@ -1415,8 +1415,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   debug_assert!(bsize.subsampled_size(xdec, ydec) == uv_tx_size.block_size());
 
   let (visible_w, visible_h) = clip_visible_bsize(
-    ts.mi_width,
-    ts.mi_height,
+    (ts.width + 3) >> 2,
+    (ts.height + 3) >> 2,
     bsize,
     tile_bo.0.x,
     tile_bo.0.y,
