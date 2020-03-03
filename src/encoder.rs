@@ -1188,7 +1188,8 @@ pub fn encode_tx_block<T: Pixel>(
   }
 
   let coded_tx_area = av1_get_coded_tx_size(tx_size).area();
-  let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
+  //let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
+  let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::new([0i16; 64 * 64]);
   let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
     Aligned::uninitialized();
   let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
@@ -1203,12 +1204,21 @@ pub fn encode_tx_block<T: Pixel>(
   );
   let rcoeffs = &mut rcoeffs_storage.data[..coded_tx_area];
 
+  let (visible_w, visible_h) = clip_visible_bsize(
+    (ts.width + 3) >> 2,
+    (ts.height + 3) >> 2,
+    tx_size.block_size(),
+    tx_bo.0.x,
+    tx_bo.0.y,
+  );
+
+
   diff(
     residual,
     &ts.input_tile.planes[p].subregion(area),
     &rec.subregion(area),
-    tx_size.width(),
-    tx_size.height(),
+    visible_w,
+    visible_h,
   );
 
   forward_transform(
@@ -1853,8 +1863,8 @@ pub fn luma_ac<T: Pixel>(
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let (visible_w, visible_h) = clip_visible_bsize(
-    ts.mi_width,
-    ts.mi_height,
+    (ts.width + 3) >> 2,
+    (ts.height + 3) >> 2,
     bsize,
     tile_bo.0.x,
     tile_bo.0.y,

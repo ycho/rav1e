@@ -418,7 +418,7 @@ impl SpeedSettings {
     } else if speed <= 8 {
       PartitionRange::new(BlockSize::BLOCK_8X8, BlockSize::BLOCK_64X64)
     } else if speed <= 9 {
-      PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_64X64)
+      PartitionRange::new(BlockSize::BLOCK_64X64, BlockSize::BLOCK_64X64)
     } else {
       PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_32X32)
     }
@@ -525,7 +525,7 @@ impl SpeedSettings {
   }
 
   fn fine_directional_intra_preset(speed: usize) -> bool {
-    speed <= 1 || speed >= 6
+    speed <= 1
   }
 }
 

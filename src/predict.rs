@@ -29,6 +29,7 @@ use crate::mc::*;
 use crate::partition::*;
 use crate::tiling::*;
 use crate::transform::*;
+use crate::rdo::clip_visible_bsize;
 use crate::util::*;
 use std::convert::TryInto;
 
@@ -38,14 +39,14 @@ pub const ANGLE_STEP: i8 = 3;
 // The order impacts compression efficiency.
 pub static RAV1E_INTRA_MODES: &[PredictionMode] = &[
   PredictionMode::DC_PRED,
-  /*PredictionMode::H_PRED,
-  PredictionMode::V_PRED,
-  PredictionMode::SMOOTH_PRED,
+  //PredictionMode::H_PRED,
+  //PredictionMode::V_PRED,
+  /*PredictionMode::SMOOTH_PRED,
   PredictionMode::SMOOTH_H_PRED,
   PredictionMode::SMOOTH_V_PRED,
-  PredictionMode::PAETH_PRED,
-  PredictionMode::D45_PRED,
-  PredictionMode::D135_PRED,
+  PredictionMode::PAETH_PRED,*/
+  //PredictionMode::D45_PRED,
+  /*PredictionMode::D135_PRED,
   PredictionMode::D113_PRED,
   PredictionMode::D157_PRED,
   PredictionMode::D203_PRED,
@@ -509,8 +510,13 @@ pub(crate) mod rust {
     ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
     edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, _cpu: CpuFeatureLevel,
   ) {
-    let width = tx_size.width();
-    let height = tx_size.height();
+    let (width, height) = clip_visible_bsize(
+      (dst.plane_cfg.width + 3) >> 2,
+      (dst.plane_cfg.height + 3) >> 2,
+      tx_size.block_size(),
+      ((dst.rect().x + 3) >> 2) as usize,
+      ((dst.rect().y + 3) >> 2) as usize,
+    );
 
     // left pixels are ordered from bottom to top and right-aligned
     let (left, not_left) = edge_buf.data.split_at(2 * MAX_TX_SIZE);
