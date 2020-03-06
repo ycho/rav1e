@@ -590,8 +590,8 @@ pub fn get_intra_edges<T: Pixel>(
     // Needs left
     if needs_left {
       if x != 0 {
-        let txh = if y + tx_size.height() >= dst.rect().height {
-          y + tx_size.height() - dst.rect().height
+        let txh = if y + tx_size.height() > dst.rect().height {
+          dst.rect().height - y
         } else {
           tx_size.height()
         };
@@ -609,8 +609,8 @@ pub fn get_intra_edges<T: Pixel>(
     // Needs top
     if needs_top {
       if y != 0 {
-        let txw = if x + tx_size.width() >= dst.rect().width {
-          x + tx_size.width() - dst.rect().width
+        let txw = if x + tx_size.width() > dst.rect().width {
+          dst.rect().width - x
         } else {
           tx_size.width()
         };
