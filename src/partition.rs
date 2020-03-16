@@ -589,14 +589,21 @@ pub fn get_intra_edges<T: Pixel>(
 
     // Needs left
     if needs_left {
+      let txh = if y + tx_size.height() > dst.rect().height {
+        dst.rect().height - y
+      } else {
+        tx_size.height()
+      };
       if x != 0 {
-        let txh = if y + tx_size.height() > dst.rect().height {
-          dst.rect().height - y
-        } else {
-          tx_size.height()
-        };
         for i in 0..txh {
-          left[2 * MAX_TX_SIZE - txh + i] = dst[y + txh - 1 - i][x - 1];
+          debug_assert!(y + i < dst.rect().height);
+          left[2 * MAX_TX_SIZE - 1 - i] = dst[y + i][x - 1];
+        }
+        if txh < tx_size.height() {
+          let val = dst[y + txh - 1][x - 1];
+          for i in txh..tx_size.height() {
+            left[2 * MAX_TX_SIZE - 1 - i] = val;
+          }
         }
       } else {
         let val = if y != 0 { dst[y - 1][0] } else { T::cast_from(base + 1) };
@@ -608,12 +615,12 @@ pub fn get_intra_edges<T: Pixel>(
 
     // Needs top
     if needs_top {
+      let txw = if x + tx_size.width() > dst.rect().width {
+        dst.rect().width - x
+      } else {
+        tx_size.width()
+      };
       if y != 0 {
-        let txw = if x + tx_size.width() > dst.rect().width {
-          dst.rect().width - x
-        } else {
-          tx_size.width()
-        };
         above[..txw].copy_from_slice(&dst[y - 1][x..x + txw]);
       } else {
         let val = if x != 0 { dst[0][x - 1] } else { T::cast_from(base - 1) };
