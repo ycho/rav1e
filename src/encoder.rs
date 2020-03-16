@@ -1125,7 +1125,7 @@ pub fn encode_tx_block<T: Pixel>(
   rdo_type: RDOType,
   need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
-  let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
+  let PlaneConfig { width, height, xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
   let area = Area::BlockStartingAt { bo: tx_bo.0 };
 
@@ -1205,13 +1205,12 @@ pub fn encode_tx_block<T: Pixel>(
   let rcoeffs = &mut rcoeffs_storage.data[..coded_tx_area];
 
   let (visible_w, visible_h) = clip_visible_bsize(
-    (ts.width + 3) >> 2,
-    (ts.height + 3) >> 2,
+    (width + 3) >> 2,
+    (height + 3) >> 2,
     tx_size.block_size(),
-    tx_bo.0.x,
-    tx_bo.0.y,
+    tx_bo.0.x >> xdec,
+    tx_bo.0.y >> ydec,
   );
-
 
   diff(
     residual,
