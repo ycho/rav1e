@@ -293,6 +293,9 @@ pub fn clip_visible_bsize(
   visible_w *= 4;
   visible_h *= 4;
 
+  debug_assert!(visible_w > 0);
+  debug_assert!(visible_h > 0);
+
   (visible_w, visible_h)
 }
 
@@ -717,9 +720,6 @@ fn luma_chroma_mode_rdo<T: Pixel>(
   let is_chroma_block =
     has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
 
-  let frame_w_mi = ts.mi_width;
-  let frame_h_mi = ts.mi_height;
-
   // Find the best chroma prediction mode for the current luma prediction mode
   let mut chroma_rdo = |skip: bool| -> bool {
     let mut zero_distortion = false;
@@ -830,28 +830,6 @@ fn luma_chroma_mode_rdo<T: Pixel>(
     if !zero_distortion {
       chroma_rdo(false);
     }
-
-/*
-  // For DEBUG/TEST: if a partition straddle on right or bottom frame border, rdo encode skip = true case only.
-  let zero_distortion = if !luma_mode_is_intra
-    || (luma_mode_is_intra
-      && (tile_bo.0.y + bsize.height_mi() > frame_h_mi
-        || tile_bo.0.x + bsize.width_mi() > frame_w_mi))
-  {
-    chroma_rdo(true)
-  } else {
-    false
-  };
-
-  if !zero_distortion {
-    if !luma_mode_is_intra
-      || (tile_bo.0.y + bsize.height_mi() <= frame_h_mi
-        && tile_bo.0.x + bsize.width_mi() <= frame_w_mi)
-    {
-      chroma_rdo(false);
-    }
-  }
-  */
 }
 
 // RDO-based mode decision
@@ -1283,11 +1261,12 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   cw_checkpoint: &ContextWriterCheckpoint, rdo_type: RDOType,
   mut best: PartitionParameters, is_chroma_block: bool,
 ) -> PartitionParameters {
-  let num_modes_rdo: usize;
-  let mut modes = ArrayVec::<[_; INTRA_MODES]>::new();
+  //let num_modes_rdo: usize;
+  let num_modes_rdo = 1 as usize;
+  //let mut modes = ArrayVec::<[_; INTRA_MODES]>::new();
 
   // Reduce number of prediction modes at higher speed levels
-  num_modes_rdo = if (fi.frame_type == FrameType::KEY
+  /*num_modes_rdo = if (fi.frame_type == FrameType::KEY
     && fi.config.speed_settings.prediction_modes
       >= PredictionModesSetting::ComplexKeyframes)
     || (fi.frame_type.has_inter()
@@ -1297,12 +1276,12 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     7
   } else {
     3
-  };
+  };*/
 
   let intra_mode_set = RAV1E_INTRA_MODES;
 
   // Find mode with lowest rate cost
-  {
+  /*{
     let probs_all = if fi.frame_type.has_inter() {
       cw.get_cdf_intra_mode(bsize)
     } else {
@@ -1393,11 +1372,13 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     };
 
     modes[num_modes_rdo / 2..].sort_by_key(|&a| satds[a as usize]);
-  }
+  }*/
 
   debug_assert!(num_modes_rdo >= 1);
 
-  modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
+  //modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
+  let luma_mode = PredictionMode::DC_PRED;
+  {
     let mvs = [MotionVector::default(); 2];
     let ref_frames = [INTRA_FRAME, NONE_FRAME];
     let mut mode_set_chroma = ArrayVec::<[_; 2]>::new();
@@ -1423,7 +1404,8 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       &ArrayVec::<[CandidateMV; 9]>::new(),
       AngleDelta::default(),
     );
-  });
+  //});
+  };
 
   /*if fi.config.speed_settings.fine_directional_intra
     && bsize >= BlockSize::BLOCK_8X8
