@@ -121,9 +121,9 @@ fn get_mv_range(fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usi
   let border_w = 128 + blk_w as isize * 8;
   let border_h = 128 + blk_h as isize * 8;
   let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
-  let mvx_max = (fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
+  let mvx_max = fi.w_in_b as isize - bo.x as isize - (blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
   let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
-  let mvy_max = (fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+  let mvy_max = fi.h_in_b as isize - bo.y as isize - (blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
 
   (mvx_min, mvx_max, mvy_min, mvy_max)
 }

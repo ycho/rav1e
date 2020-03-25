@@ -1295,7 +1295,13 @@ impl BlockContext {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
     for y in 0..bh {
+      if bo.y + y >= self.rows {
+        continue;
+      }
       for x in 0..bw {
+        if bo.x + x >= self.cols {
+          continue;
+        }
         f(&mut self.blocks[bo.y + y as usize][bo.x + x as usize]);
       }
     }
@@ -1469,7 +1475,13 @@ impl BlockContext {
     let bh = bsize.height_mi();
 
     for y in 0..bh {
+      if bo.y + y >= self.rows {
+        continue;
+      }
       for x in 0..bw {
+        if bo.x + x >= self.cols {
+          continue;
+        }
         self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames = r;
       }
     }
@@ -1480,7 +1492,13 @@ impl BlockContext {
     let bh = bsize.height_mi();
 
     for y in 0..bh {
+      if bo.y + y >= self.rows {
+        continue;
+      }
       for x in 0..bw {
+        if bo.x + x >= self.cols {
+          continue;
+        }
         self.blocks[bo.y + y as usize][bo.x + x as usize].mv = mvs;
       }
     }
@@ -2537,9 +2555,9 @@ impl ContextWriter {
       let border_w = 128 + blk_w as isize * 8;
       let border_h = 128 + blk_h as isize * 8;
       let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let mvx_max = (self.bc.cols - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
+      let mvx_max = self.bc.cols as isize - bo.x as isize - (blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
       let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let mvy_max = (self.bc.rows - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+      let mvy_max = self.bc.rows as isize - bo.y as isize - (blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
       mv.this_mv.row = (mv.this_mv.row as isize).max(mvy_min).min(mvy_max) as i16;
       mv.this_mv.col = (mv.this_mv.col as isize).max(mvx_min).min(mvx_max) as i16;
       mv.comp_mv.row = (mv.comp_mv.row as isize).max(mvy_min).min(mvy_max) as i16;

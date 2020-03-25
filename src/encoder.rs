@@ -2007,11 +2007,27 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
     }
 
     let bs = bsize.width_mi();
+    let hbs = bs >> 1;
+    let has_cols = bo.x + hbs < fi.w_in_b; // has more than half block size inside frame
+    let has_rows = bo.y + hbs < fi.h_in_b;
+    let is_square = bsize.is_sqr();
+
+    let must_split =
+      is_square && (bsize > BlockSize::BLOCK_64X64 || !has_cols || !has_rows);
+
+    /*let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
+      if fi.frame_type.has_inter() &&
+        fi.config.chroma_sampling != ChromaSampling::Cs420 &&
+        bsize <= BlockSize::BLOCK_8X8 {
+        false
+      } else {
+        (bsize > fi.min_partition_size && is_square) || must_split
+      };*/
 
     // Always split if the current partition is too large
-    let must_split = bo.x + bs as usize > fi.w_in_b ||
+    /*let must_split = bo.x + bs as usize > fi.w_in_b ||
         bo.y + bs as usize > fi.h_in_b ||
-        bsize > BlockSize::BLOCK_64X64;
+        bsize > BlockSize::BLOCK_64X64;*/
 
     let mut rdo_output = block_output.clone().unwrap_or(RDOOutput {
         part_type: PartitionType::PARTITION_INVALID,
