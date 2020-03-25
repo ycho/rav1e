@@ -1341,6 +1341,20 @@ fn diff(dst: &mut [i16], src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, width: us
   }
 }
 
+fn set_zero(dst: &mut [i16], src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, width: usize, height: usize) {
+  let src1_stride = src1.plane.cfg.stride;
+  let src2_stride = src2.plane.cfg.stride;
+
+  for ((l, s1), s2) in dst.chunks_mut(width).take(height)
+                        .zip(src1.as_slice().chunks(src1_stride))
+                        .zip(src2.as_slice().chunks(src2_stride)) {
+    for ((r, v1), v2) in l.iter_mut().zip(s1).zip(s2) {
+      //*r = *v1 as i16 - *v2 as i16;
+      *r = 0;
+    }
+  }
+}
+
 // For a transform block,
 // predict, transform, quantize, write coefficients to a bitstream,
 // dequantize, inverse-transform.
@@ -1368,12 +1382,21 @@ pub fn encode_tx_block(
     let qcoeffs = &mut qcoeffs_storage.array[..tx_size.area()];
     let rcoeffs = &mut rcoeffs_storage.array[..tx_size.area()];
 
+    if (bo.y >> ydec) + tx_size.height_mi() <= (fi.h_in_b >> ydec) &&
+      (bo.x >> xdec) + tx_size.width_mi() <= (fi.w_in_b >> xdec) {
     diff(residual,
          &fs.input.planes[p].slice(po),
          &rec.slice(po),
          tx_size.width(),
          tx_size.height());
+    } else {
+      set_zero(residual,
+        &fs.input.planes[p].slice(po),
+        &rec.slice(po),
+        tx_size.width(),
+        tx_size.height());
 
+    }
     forward_transform(residual, coeffs, tx_size.width(), tx_size, tx_type, bit_depth);
     fs.qc.quantize(coeffs, qcoeffs);
 
