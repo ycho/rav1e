@@ -53,6 +53,8 @@ use std::{fmt, io, mem};
 use crate::hawktracer::*;
 use crate::rayon::iter::*;
 
+use crate::cpu_features::CpuFeatureLevel;
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum CDEFSearchMethod {
@@ -1079,6 +1081,24 @@ fn diff<T: Pixel>(
   }
 }
 
+fn diff2<T: Pixel>(
+  dst: &mut [i16], src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>,
+  width: usize, height: usize,
+) {
+  let stride1 = src1.plane_cfg.stride;
+  let stride2 = src2.plane_cfg.stride;
+
+  for y in 0..height {
+    for x in 0..width {
+      unsafe {
+      let v1 = src1.data_ptr().add(y * stride1 + x);
+      let v2 = src2.data_ptr().add(y * stride2 + x);
+      dst[y * width + x] = i16::cast_from(*v1) - i16::cast_from(*v2);
+      }
+    }
+  }
+}
+
 fn get_qidx<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, cw: &ContextWriter,
   tile_bo: TileBlockOffset,
@@ -1168,7 +1188,6 @@ pub fn encode_tx_block<T: Pixel>(
       fi.sequence.enable_intra_edge_filter,
       pred_intra_param,
     );
-    use crate::cpu_features::CpuFeatureLevel;
     mode.predict_intra(
       tile_rect,
       &mut rec.subregion_mut(area),
@@ -1211,14 +1230,24 @@ pub fn encode_tx_block<T: Pixel>(
     tx_bo.0.y >> ydec,
   );
 
-  diff(
+  //if tile_partition_bo.0.y + tx_size.height_mi() < ts.mi_height {
+  if visible_h == tx_size.height() {
+  diff2(
     residual,
     &ts.input_tile.planes[p].subregion(area),
     &rec.subregion(area),
-    visible_w,
-    visible_h,
+    visible_w,//tx_size.width(),
+    visible_h,//tx_size.height(),
   );
-
+  } else {
+    diff2(
+      residual,
+      &ts.input_tile.planes[p].subregion(area),
+      &rec.subregion(area),
+      tx_size.width(),
+      tx_size.height(),
+    );
+  }
   forward_transform(
     residual,
     coeffs,
@@ -1271,7 +1300,7 @@ pub fn encode_tx_block<T: Pixel>(
       tx_size,
       tx_type,
       fi.sequence.bit_depth,
-      fi.cpu_feature_level,
+      CpuFeatureLevel::NATIVE, //fi.cpu_feature_level,
     );
   }
 
@@ -2668,7 +2697,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         };
 
         // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-        rdo_mode_decision(
+        /*rdo_mode_decision(
           fi,
           ts,
           cw,
@@ -2676,7 +2705,8 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           tile_bo,
           (pmv_idx, pmv_inner_idx),
           inter_cfg,
-        )
+        )*/
+        PartitionParameters::default()
       };
 
       let mut mode_luma = part_decision.pred_mode_luma;

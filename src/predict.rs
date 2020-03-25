@@ -597,6 +597,13 @@ pub(crate) mod native {
       / len;
     let avg = T::cast_from(avg);
 
+    // TEST whether rows_iter_mut() behave differently if clipped height is passed
+    /*let txh = if output.rect().y as usize + height > output.plane_cfg.height {
+      output.plane_cfg.height - output.rect().y as usize
+    } else {
+      height
+    };*/
+
     for line in output.rows_iter_mut().take(height) {
       for v in &mut line[..width] {
         *v = avg;
