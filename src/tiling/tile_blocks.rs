@@ -175,13 +175,7 @@ impl TileBlocksMut<'_> {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
     for y in 0..bh {
-      if bo.0.y + y >= self.rows {
-        continue;
-      }
       for x in 0..bw {
-        if bo.0.x + x >= self.cols {
-          continue;
-        }
         f(&mut self[bo.0.y + y as usize][bo.0.x + x as usize]);
       }
     }
