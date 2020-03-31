@@ -1891,12 +1891,13 @@ impl ContextWriter {
   }
 
   pub fn write_partition(
-    &mut self, w: &mut dyn Writer, bo: &BlockOffset, p: PartitionType, bsize: BlockSize
+    &mut self, w: &mut dyn Writer, bo: &BlockOffset, p: PartitionType, bsize: BlockSize,
+    cols: usize, rows: usize,
   ) {
     assert!(bsize >= BlockSize::BLOCK_8X8 );
     let hbs = bsize.width_mi() / 2;
-    let has_cols = (bo.x + hbs) < self.bc.cols;
-    let has_rows = (bo.y + hbs) < self.bc.rows;
+    let has_cols = (bo.x + hbs) < cols;
+    let has_rows = (bo.y + hbs) < rows;
     let ctx = self.bc.partition_plane_context(&bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {

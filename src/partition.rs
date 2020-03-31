@@ -904,7 +904,12 @@ impl PredictionMode {
       if x != 0 {
         let left_slice = dst.go_left(1);
         for i in 0..B::H {
+          if y as usize + i < dst.plane.cfg.height {
           left[MAX_TX_SIZE - B::H + i] = left_slice.p(0, B::H - 1 - i);
+          } else {
+            let val = dst.p(x as usize - 1 , dst.plane.cfg.height - (y as usize) - 1);
+            left[MAX_TX_SIZE - B::H + i] = val;
+          }
         }
       } else {
         let val = if y != 0 { dst.go_up(1).p(0, 0) } else { base + 1 };

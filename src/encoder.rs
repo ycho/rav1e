@@ -1382,15 +1382,15 @@ pub fn encode_tx_block(
     let qcoeffs = &mut qcoeffs_storage.array[..tx_size.area()];
     let rcoeffs = &mut rcoeffs_storage.array[..tx_size.area()];
 
-    if (bo.y >> ydec) + tx_size.height_mi() <= (fi.h_in_b >> ydec) &&
-      (bo.x >> xdec) + tx_size.width_mi() <= (fi.w_in_b >> xdec) {
+    if true /*(bo.y >> ydec) + tx_size.height_mi() <= (fi.h_in_b >> ydec) &&
+      (bo.x >> xdec) + tx_size.width_mi() <= (fi.w_in_b >> xdec)*/ {
     diff(residual,
          &fs.input.planes[p].slice(po),
          &rec.slice(po),
          tx_size.width(),
          tx_size.height());
     } else {
-      set_zero(residual,
+      diff(residual,
         &fs.input.planes[p].slice(po),
         &rec.slice(po),
         tx_size.width(),
@@ -1845,7 +1845,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 ) -> f64 {
     let mut rd_cost = std::f64::MAX;
 
-    if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
+    if bo.x >= fi.w_in_b || bo.y >= fi.h_in_b {
         return rd_cost;
     }
 
@@ -1889,7 +1889,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         if bsize >= BlockSize::BLOCK_8X8 {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             let tell = w.tell_frac();
-            cw.write_partition(w, bo, partition, bsize);
+            cw.write_partition(w, bo, partition, bsize, fi.w_in_b, fi.h_in_b);
             cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
 
@@ -1945,7 +1945,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         if bsize >= BlockSize::BLOCK_8X8 {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             let tell = w.tell_frac();
-            cw.write_partition(w, bo, partition, bsize);
+            cw.write_partition(w, bo, partition, bsize, fi.w_in_b, fi.h_in_b);
             rd_cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
 
@@ -1981,7 +1981,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
             if bsize >= BlockSize::BLOCK_8X8 {
                 let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
-                cw.write_partition(w, bo, partition, bsize);
+                cw.write_partition(w, bo, partition, bsize, fi.w_in_b, fi.h_in_b);
             }
 
             // FIXME: redundant block re-encode
@@ -2025,7 +2025,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
 ) {
 
-    if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
+    if bo.x >= fi.w_in_b || bo.y >= fi.h_in_b {
         return;
     }
 
@@ -2080,7 +2080,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
     if bsize >= BlockSize::BLOCK_8X8 {
         let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
-        cw.write_partition(w, bo, partition, bsize);
+        cw.write_partition(w, bo, partition, bsize, fi.w_in_b, fi.h_in_b);
     }
 
     match partition {
@@ -2225,7 +2225,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
       }
     };
 
-    let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
+    let bc = BlockContext::new(fi.sb_width << 4, fi.sb_height << 4);
     // For now, restoration unit size is locked to superblock size. 
     let rc = RestorationContext::new(fi.sb_width, fi.sb_height);
     let mut cw = ContextWriter::new(fc, bc, rc);
