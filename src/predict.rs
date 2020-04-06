@@ -646,7 +646,9 @@ pub(crate) mod rust {
   ) {
     let v = T::cast_from(128u32 << (bit_depth - 8));
     for y in 0..height {
+      if y >= output.plane_cfg.height { break; }
       for x in 0..width {
+        if x >= output.plane_cfg.width { break; }
         output[y][x] = v;
       }
     }
