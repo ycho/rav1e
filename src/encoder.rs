@@ -1232,21 +1232,22 @@ pub fn encode_tx_block<T: Pixel>(
   );
 
   //if tile_partition_bo.0.y + tx_size.height_mi() < ts.mi_height {
-  if visible_h == tx_size.height() {
-  diff2(
+  //if visible_h == tx_size.height() {
+  if true {
+  diff(
     residual,
     &ts.input_tile.planes[p].subregion(area),
     &rec.subregion(area),
-    visible_w,//tx_size.width(),
-    visible_h,//tx_size.height(),
+    tx_size.width(),
+    tx_size.height(),
   );
   } else {
     diff2(
       residual,
       &ts.input_tile.planes[p].subregion(area),
       &rec.subregion(area),
-      tx_size.width(),
-      tx_size.height(),
+      tx_size.width(),//visible_w,
+      tx_size.height(),//visible_h,
     );
   }
   forward_transform(
@@ -1301,7 +1302,7 @@ pub fn encode_tx_block<T: Pixel>(
       tx_size,
       tx_type,
       fi.sequence.bit_depth,
-      CpuFeatureLevel::NATIVE, //fi.cpu_feature_level,
+      fi.cpu_feature_level,//CpuFeatureLevel::NATIVE, //fi.cpu_feature_level,
     );
   }
 
