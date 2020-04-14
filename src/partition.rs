@@ -622,6 +622,12 @@ pub fn get_intra_edges<T: Pixel>(
       };
       if y != 0 {
         above[..txw].copy_from_slice(&dst[y - 1][x..x + txw]);
+        if txw < tx_size.width() {
+          let val = dst[y - 1][x + txw - 1];
+          for i in txw..tx_size.width() {
+            above[i] = val;
+          }
+        }
       } else {
         let val = if x != 0 { dst[0][x - 1] } else { T::cast_from(base - 1) };
         for v in above[..tx_size.width()].iter_mut() {
