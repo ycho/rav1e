@@ -603,9 +603,16 @@ pub(crate) mod rust {
       height
     };*/
 
-    for line in output.rows_iter_mut().take(height) {
+    /*for line in output.rows_iter_mut().take(height) {
       for v in &mut line[..width] {
         *v = avg;
+      }
+    }*/
+    for y in 0..height {
+      if output.rect().y as usize + y >= output.plane_cfg.height { break; }
+      for x in 0..width {
+        if output.rect().x as usize + x >= output.plane_cfg.width { break; }
+        output[y][x] = avg;
       }
     }
   }
@@ -616,9 +623,9 @@ pub(crate) mod rust {
   ) {
     let v = T::cast_from(128u32 << (bit_depth - 8));
     for y in 0..height {
-      if y >= output.plane_cfg.height { break; }
+      if output.rect().y as usize + y >= output.plane_cfg.height { break; }
       for x in 0..width {
-        if x >= output.plane_cfg.width { break; }
+        if output.rect().x as usize + x >= output.plane_cfg.width { break; }
         output[y][x] = v;
       }
     }
@@ -633,8 +640,15 @@ pub(crate) mod rust {
       v + acc
     });
     let avg = T::cast_from((sum + (height >> 1) as u32) / height as u32);
-    for line in output.rows_iter_mut().take(height) {
+    /*for line in output.rows_iter_mut().take(height) {
       line[..width].iter_mut().for_each(|v| *v = avg);
+    }*/
+    for y in 0..height {
+      if output.rect().y as usize + y >= output.plane_cfg.height { break; }
+      for x in 0..width {
+        if output.rect().x as usize + x >= output.plane_cfg.width { break; }
+        output[y][x] = avg;
+      }
     }
   }
 
@@ -647,8 +661,15 @@ pub(crate) mod rust {
       v + acc
     });
     let avg = T::cast_from((sum + (width >> 1) as u32) / width as u32);
-    for line in output.rows_iter_mut().take(height) {
+    /*for line in output.rows_iter_mut().take(height) {
       line[..width].iter_mut().for_each(|v| *v = avg);
+    }*/
+    for y in 0..height {
+      if output.rect().y as usize + y >= output.plane_cfg.height { break; }
+      for x in 0..width {
+        if output.rect().x as usize + x >= output.plane_cfg.width { break; }
+        output[y][x] = avg;
+      }
     }
   }
 
