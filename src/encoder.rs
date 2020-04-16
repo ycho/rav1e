@@ -1094,7 +1094,9 @@ fn diff2<T: Pixel>(
       unsafe {
       let v1 = src1.data_ptr().add(y * stride1 + x);
       let v2 = src2.data_ptr().add(y * stride2 + x);
-      dst[y * width + x] = i16::cast_from(*v1) - i16::cast_from(*v2);
+      let diff = i16::cast_from(*v1) - i16::cast_from(*v2);
+      debug_assert!(-255 <= diff && diff <= 255);
+      dst[y * width + x] = diff;
       }
     }
   }
@@ -1210,7 +1212,8 @@ pub fn encode_tx_block<T: Pixel>(
   //let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
   let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::new([0i16; 64 * 64]);
   let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
-    Aligned::uninitialized();
+    //Aligned::uninitialized();
+    Aligned::new([T::Coeff::cast_from(0); 64 * 64]);
   let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
     Aligned::uninitialized();
   let mut rcoeffs_storage: Aligned<[T::Coeff; 32 * 32]> =
@@ -1231,9 +1234,11 @@ pub fn encode_tx_block<T: Pixel>(
     tx_bo.0.y >> ydec,
   );
 
+  //if (!((p != 0) && tx_bo.0.y == 0 && tx_bo.0.x == 16))
+  {
   //if tile_partition_bo.0.y + tx_size.height_mi() < ts.mi_height {
-  //if visible_h == tx_size.height() {
-  if true {
+  //if visible_h == tx_size.height() && visible_w == tx_size.width() {
+  if false {
   diff(
     residual,
     &ts.input_tile.planes[p].subregion(area),
@@ -1246,9 +1251,10 @@ pub fn encode_tx_block<T: Pixel>(
       residual,
       &ts.input_tile.planes[p].subregion(area),
       &rec.subregion(area),
-      tx_size.width(),//visible_w,
-      tx_size.height(),//visible_h,
+      tx_size.width(),
+      tx_size.height(),
     );
+  }
   }
   forward_transform(
     residual,
@@ -1302,7 +1308,7 @@ pub fn encode_tx_block<T: Pixel>(
       tx_size,
       tx_type,
       fi.sequence.bit_depth,
-      fi.cpu_feature_level,//CpuFeatureLevel::NATIVE, //fi.cpu_feature_level,
+      CpuFeatureLevel::NATIVE, //fi.cpu_feature_level,
     );
   }
 
@@ -3012,6 +3018,9 @@ fn encode_tile_group<T: Pixel>(
     );
   }
   fs.deblock.levels = levels;
+
+  fs.deblock.levels[0] = 0;
+  fs.deblock.levels[1] = 0;
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
     let ts = &mut fs.as_tile_state_mut();
     let rec = &mut ts.rec;
