@@ -539,6 +539,7 @@ pub fn get_intra_edges<T: Pixel>(
 
   let mut edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> =
     Aligned::uninitialized();
+    //Aligned::new([T::cast_from(0); 4 * MAX_TX_SIZE + 1]);
   let base = 128u16 << (bit_depth - 8);
 
   {
