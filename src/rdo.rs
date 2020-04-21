@@ -1192,7 +1192,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 ) -> PartitionParameters {
   //let num_modes_rdo: usize;
   let num_modes_rdo = 1 as usize;
-  //let mut modes = ArrayVec::<[_; INTRA_MODES]>::new();
+  let mut modes = ArrayVec::<[_; INTRA_MODES]>::new();
 
   // Reduce number of prediction modes at higher speed levels
   /*num_modes_rdo = if (fi.frame_type == FrameType::KEY
@@ -1210,7 +1210,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   let intra_mode_set = RAV1E_INTRA_MODES;
 
   // Find mode with lowest rate cost
-  /*{
+  {
     let probs_all = if fi.frame_type.has_inter() {
       cw.get_cdf_intra_mode(bsize)
     } else {
@@ -1301,13 +1301,11 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     };
 
     modes[num_modes_rdo / 2..].sort_by_key(|&a| satds[a as usize]);
-  }*/
+  }
 
   debug_assert!(num_modes_rdo >= 1);
 
-  //modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
-  let luma_mode = PredictionMode::DC_PRED;
-  {
+  modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
     let mvs = [MotionVector::default(); 2];
     let ref_frames = [INTRA_FRAME, NONE_FRAME];
     let mut mode_set_chroma = ArrayVec::<[_; 2]>::new();
@@ -1333,8 +1331,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       &ArrayVec::<[CandidateMV; 9]>::new(),
       AngleDelta::default(),
     );
-  //});
-  };
+  });
 
   /*if fi.config.speed_settings.fine_directional_intra
     && bsize >= BlockSize::BLOCK_8X8
