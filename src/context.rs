@@ -1601,8 +1601,9 @@ impl<'a> BlockContext<'a> {
   fn set_coeff_context(
     &mut self, plane: usize, bo: TileBlockOffset, tx_size: TxSize,
     xdec: usize, ydec: usize, value: u8,
+    visible_w: usize, visible_h: usize,
   ) {
-    for above in &mut self.above_coeff_context[plane][(bo.0.x >> xdec)..]
+    /*for above in &mut self.above_coeff_context[plane][(bo.0.x >> xdec)..]
       [..tx_size.width_mi()]
     {
       *above = value;
@@ -1612,6 +1613,24 @@ impl<'a> BlockContext<'a> {
       [..tx_size.height_mi()]
     {
       *left = value;
+    }*/
+    for x in 0..(visible_w >> 2) {
+      self.above_coeff_context[plane][(bo.0.x >> xdec) + x] = value;
+    }
+    if tx_size.width_mi() > (visible_w >> 2) {
+      for x in (visible_w >> 2)..tx_size.width_mi() {
+        self.above_coeff_context[plane][(bo.0.x >> xdec) + x] = 0;
+      }
+    }
+
+    let bo_y = bo.y_in_sb();
+    for y in 0..(visible_h >> 2) {
+      self.left_coeff_context[plane][(bo_y >> ydec) + y] = value;
+    }
+    if tx_size.height_mi() > (visible_h >> 2) {
+      for y in (visible_h >> 2)..tx_size.height_mi() {
+        self.left_coeff_context[plane][(bo_y >> ydec) + y] = 0;
+      }
     }
   }
 
@@ -4121,6 +4140,7 @@ impl<'a> ContextWriter<'a> {
     coeffs_in: &[T], eob: usize, pred_mode: PredictionMode, tx_size: TxSize,
     tx_type: TxType, plane_bsize: BlockSize, xdec: usize, ydec: usize,
     use_reduced_tx_set: bool,
+    visible_w: usize, visible_h: usize,
   ) -> bool {
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
     //assert!(!is_inter);
@@ -4147,7 +4167,7 @@ impl<'a> ContextWriter<'a> {
     }
 
     if eob == 0 {
-      self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, 0);
+      self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, 0, tx_size.width(), tx_size.height());
       return false;
     }
 
@@ -4305,7 +4325,7 @@ impl<'a> ContextWriter<'a> {
 
     BlockContext::set_dc_sign(&mut cul_level, i32::cast_from(coeffs[0]));
 
-    self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8);
+    self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8, visible_w, visible_h);
     true
   }
 

@@ -1146,9 +1146,10 @@ pub fn encode_tx_block<T: Pixel>(
   rdo_type: RDOType,
   need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
-  let PlaneConfig { width, height, xdec, ydec, .. } = ts.input.planes[p].cfg;
+  let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
   let area = Area::BlockStartingAt { bo: tx_bo.0 };
+  //let (width, height) = (tile_rect.width, tile_rect.height);
 
   debug_assert!(tx_bo.0.x < ts.mi_width);
   debug_assert!(tx_bo.0.y < ts.mi_height);
@@ -1211,8 +1212,8 @@ pub fn encode_tx_block<T: Pixel>(
   //let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
   let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::new([0i16; 64 * 64]);
   let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
-    //Aligned::uninitialized();
-    Aligned::new([T::Coeff::cast_from(0); 64 * 64]);
+    Aligned::uninitialized();
+    //Aligned::new([T::Coeff::cast_from(0); 64 * 64]);
   let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
     Aligned::uninitialized();
   let mut rcoeffs_storage: Aligned<[T::Coeff; 32 * 32]> =
@@ -1226,18 +1227,18 @@ pub fn encode_tx_block<T: Pixel>(
   let rcoeffs = &mut rcoeffs_storage.data[..coded_tx_area];
 
   let (visible_w, visible_h) = clip_visible_bsize(
-    (width + 3) >> 2,
-    (height + 3) >> 2,
+    (tile_rect.width + 3) >> 2,
+    (tile_rect.height + 3) >> 2,
     tx_size.block_size(),
     tx_bo.0.x >> xdec,
     tx_bo.0.y >> ydec,
   );
 
-  //if (!((p != 0) && tx_bo.0.y == 0 && tx_bo.0.x == 16))
+  //if (!((p != 0) && tx_bo.0.y == 16 && tx_bo.0.x == 16))
   {
   //if tile_partition_bo.0.y + tx_size.height_mi() < ts.mi_height {
   //if visible_h == tx_size.height() && visible_w == tx_size.width() {
-  if false {
+  if true {
   diff(
     residual,
     &ts.input_tile.planes[p].subregion(area),
@@ -1281,6 +1282,8 @@ pub fn encode_tx_block<T: Pixel>(
       xdec,
       ydec,
       fi.use_reduced_tx_set,
+      visible_w,
+      visible_h,
     )
   } else {
     true
@@ -2733,9 +2736,10 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       // NOTE: Cannot avoid calling rdo_tx_size_type() here again,
       // because, with top-down partition RDO, the neighnoring contexts
       // of current partition can change, i.e. neighboring partitions can split down more.
-      let (tx_size, tx_type) = rdo_tx_size_type(
+      /*let (tx_size, tx_type) = rdo_tx_size_type(
         fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip,
-      );
+      );*/
+      let (tx_size, tx_type) = (bsize.tx_size(), TxType::DCT_DCT);
 
       let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
       let is_compound = ref_frames[1] != NONE_FRAME;
@@ -3001,6 +3005,7 @@ fn encode_tile_group<T: Pixel>(
 
   /* TODO: Don't apply if lossless */
   deblock_filter_optimize(fi, fs, &blocks);
+  // TEST: yushin: disable deblocking
   fs.deblock.levels[0] = 0;
   fs.deblock.levels[1] = 0;
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
