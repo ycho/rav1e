@@ -1308,7 +1308,7 @@ pub fn encode_tx_block<T: Pixel>(
       tx_size,
       tx_type,
       fi.sequence.bit_depth,
-      CpuFeatureLevel::NATIVE, //fi.cpu_feature_level,
+      fi.cpu_feature_level,
     );
   }
 
@@ -2736,7 +2736,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         };
 
         // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-        /*rdo_mode_decision(
+        rdo_mode_decision(
           fi,
           ts,
           cw,
@@ -2744,8 +2744,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           tile_bo,
           (pmv_idx, pmv_inner_idx),
           inter_cfg,
-        )*/
-        PartitionParameters::default()
+        )
       };
 
       let mut mode_luma = part_decision.pred_mode_luma;
@@ -2764,10 +2763,9 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       // NOTE: Cannot avoid calling rdo_tx_size_type() here again,
       // because, with top-down partition RDO, the neighnoring contexts
       // of current partition can change, i.e. neighboring partitions can split down more.
-      /*let (tx_size, tx_type) = rdo_tx_size_type(
+      let (tx_size, tx_type) = rdo_tx_size_type(
         fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip,
-      );*/
-      let (tx_size, tx_type) = (bsize.tx_size(), TxType::DCT_DCT);
+      );
 
       let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
       let is_compound = ref_frames[1] != NONE_FRAME;
