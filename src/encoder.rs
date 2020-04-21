@@ -1071,20 +1071,20 @@ fn diff<T: Pixel>(
   {
     for ((r, v1), v2) in l.iter_mut().zip(s1).zip(s2) {
       *r = i16::cast_from(*v1) - i16::cast_from(*v2);
-      debug_assert!(-255 <= *r && *r <= 255)
+      debug_assert!(-255 <= *r && *r <= 255);
     }
   }
 }
 
 fn diff2<T: Pixel>(
   dst: &mut [i16], src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>,
-  width: usize, height: usize,
+  width: usize, _height: usize, visible_w: usize, visible_h: usize,
 ) {
   let stride1 = src1.plane_cfg.stride;
   let stride2 = src2.plane_cfg.stride;
 
-  for y in 0..height {
-    for x in 0..width {
+  for y in 0..visible_h {
+    for x in 0..visible_w {
       unsafe {
       let v1 = src1.data_ptr().add(y * stride1 + x);
       let v2 = src2.data_ptr().add(y * stride2 + x);
@@ -1211,7 +1211,6 @@ pub fn encode_tx_block<T: Pixel>(
   let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::new([0i16; 64 * 64]);
   let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
     Aligned::uninitialized();
-    //Aligned::new([T::Coeff::cast_from(0); 64 * 64]);
   let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
     Aligned::uninitialized();
   let mut rcoeffs_storage: Aligned<[T::Coeff; 32 * 32]> =
@@ -1224,7 +1223,7 @@ pub fn encode_tx_block<T: Pixel>(
   );
   let rcoeffs = &mut rcoeffs_storage.data[..coded_tx_area];
 
-  let (visible_w, visible_h) = clip_visible_bsize(
+  let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
     (tile_rect.width + 3) >> 2,
     (tile_rect.height + 3) >> 2,
     tx_size.block_size(),
@@ -1232,11 +1231,7 @@ pub fn encode_tx_block<T: Pixel>(
     tx_bo.0.y >> ydec,
   );
 
-  //if (!((p != 0) && tx_bo.0.y == 16 && tx_bo.0.x == 16))
-  {
-  //if tile_partition_bo.0.y + tx_size.height_mi() < ts.mi_height {
-  //if visible_h == tx_size.height() && visible_w == tx_size.width() {
-  if true {
+  if false {
   diff(
     residual,
     &ts.input_tile.planes[p].subregion(area),
@@ -1251,9 +1246,13 @@ pub fn encode_tx_block<T: Pixel>(
       &rec.subregion(area),
       tx_size.width(),
       tx_size.height(),
+      visible_tx_w,
+      visible_tx_h,
     );
   }
-  }
+
+  // TODO: If tx size != visible size, then fill residue for outside frame area as zeros
+
   forward_transform(
     residual,
     coeffs,
@@ -1280,8 +1279,8 @@ pub fn encode_tx_block<T: Pixel>(
       xdec,
       ydec,
       fi.use_reduced_tx_set,
-      visible_w,
-      visible_h,
+      visible_tx_w,
+      visible_tx_h,
     )
   } else {
     true

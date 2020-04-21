@@ -707,9 +707,22 @@ pub(crate) mod rust {
     output: &mut PlaneRegionMut<'_, T>, left: &[T], width: usize,
     height: usize,
   ) {
-    for (line, l) in output.rows_iter_mut().zip(left[..height].iter().rev()) {
+    /*for (line, l) in output.rows_iter_mut().zip(left[..height].iter().rev()) {
       for v in &mut line[..width] {
         *v = *l;
+      }
+    }*/
+    let visible_h = if output.rect().y as usize + height >= output.plane_cfg.height
+                      { output.plane_cfg.height - output.rect().y as usize }
+                    else { height };
+
+    let visible_w = if output.rect().x as usize + width >= output.plane_cfg.width
+                      { output.plane_cfg.width - output.rect().x as usize }
+                    else { width };
+
+    for y in 0..visible_h {
+      for x in 0..visible_w {
+        output[y][x] = left[height - 1 - y];
       }
     }
   }
@@ -718,8 +731,16 @@ pub(crate) mod rust {
     output: &mut PlaneRegionMut<'_, T>, above: &[T], width: usize,
     height: usize,
   ) {
-    for line in output.rows_iter_mut().take(height) {
+    /*for line in output.rows_iter_mut().take(height) {
       line[..width].clone_from_slice(&above[..width])
+    }*/
+    let visible_w = if output.rect().x as usize + width >= output.plane_cfg.width
+                      { output.plane_cfg.width - output.rect().x as usize }
+                    else { width };
+
+    for y in 0..height {
+      if output.rect().y as usize + y >= output.plane_cfg.height { break; }
+      output[y][0..visible_w].clone_from_slice(&above[..visible_w]);
     }
   }
 
