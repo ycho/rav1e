@@ -38,14 +38,14 @@ pub const ANGLE_STEP: i8 = 3;
 // The order impacts compression efficiency.
 pub static RAV1E_INTRA_MODES: &[PredictionMode] = &[
   PredictionMode::DC_PRED,
-  //PredictionMode::H_PRED,
-  //PredictionMode::V_PRED,
+  PredictionMode::H_PRED,
+  PredictionMode::V_PRED,
   /*PredictionMode::SMOOTH_PRED,
   PredictionMode::SMOOTH_H_PRED,
   PredictionMode::SMOOTH_V_PRED,
   PredictionMode::PAETH_PRED,*/
-  //PredictionMode::D45_PRED,
-  /*PredictionMode::D135_PRED,
+  /*PredictionMode::D45_PRED,
+  PredictionMode::D135_PRED,
   PredictionMode::D113_PRED,
   PredictionMode::D157_PRED,
   PredictionMode::D203_PRED,
