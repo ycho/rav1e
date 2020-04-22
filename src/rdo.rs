@@ -885,7 +885,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     );
   }
 
-  /*if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
+  if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
@@ -966,7 +966,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         cw.rollback(&cw_checkpoint);
       }
     }
-  }*/
+  }
 
   cw.bc.blocks.set_mode(tile_bo, bsize, best.pred_mode_luma);
   cw.bc.blocks.set_ref_frames(tile_bo, bsize, best.ref_frames);
