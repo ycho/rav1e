@@ -1152,6 +1152,9 @@ pub fn encode_tx_block<T: Pixel>(
   let area = Area::BlockStartingAt { bo: tx_bo.0 };
   //let (width, height) = (tile_rect.width, tile_rect.height);
 
+  if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
+    return (false, ScaledDistortion::zero());
+  }
   debug_assert!(tx_bo.0.x < ts.mi_width);
   debug_assert!(tx_bo.0.y < ts.mi_height);
 
@@ -1981,6 +1984,9 @@ pub fn write_tx_blocks<T: Pixel>(
         x: tile_bo.0.x + bx * tx_size.width_mi(),
         y: tile_bo.0.y + by * tx_size.height_mi(),
       });
+      if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
+        continue;
+      }
 
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
       let (has_coeff, dist) = encode_tx_block(
@@ -2056,6 +2062,9 @@ pub fn write_tx_blocks<T: Pixel>(
             y: tile_bo.0.y + ((by * uv_tx_size.height_mi()) << ydec)
               - ((bh * tx_size.height_mi() == 1) as usize) * ydec,
           });
+          if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
+            continue;
+          }
 
           let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
           po.x += (bx * uv_tx_size.width()) as isize;
