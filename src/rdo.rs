@@ -885,7 +885,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     );
   }
 
-  if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
+  if false && best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
@@ -1465,13 +1465,15 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
   debug_assert!(bsize.subsampled_size(xdec, ydec) == uv_tx_size.block_size());
 
-  let (visible_w, visible_h) = clip_visible_bsize(
-    (ts.width + 3) >> 2,
-    (ts.height + 3) >> 2,
-    bsize,
-    tile_bo.0.x,
-    tile_bo.0.y,
+  let tile_rect = ts.tile_rect().decimated(xdec, ydec);
+  let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
+    (tile_rect.width + 3) >> 2,
+    (tile_rect.height + 3) >> 2,
+    uv_tx_size.block_size(),
+    tile_bo.0.x >> xdec,
+    tile_bo.0.y >> ydec,
   );
+
   let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
   luma_ac(&mut ac.data, ts, tile_bo, bsize);
   let best_alpha: ArrayVec<[i16; 2]> = (1..3)
@@ -1511,8 +1513,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
         sse_wxh(
           &input.subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
           &rec_region.as_const(),
-          visible_w >> xdec,
-          visible_h >> ydec,
+          visible_tx_w,
+          visible_tx_h,
           |_, _| DistortionScale::default(), // We're not doing RDO here.
         )
         .0
