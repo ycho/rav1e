@@ -1773,7 +1773,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
 
   for (&offset, pmv_inner_idx) in partitions.iter().zip(pmv_idxs) {
     let hbs = subsize.width_mi() >> 1;
-    let has_cols = offset.0.x + hbs < ts.mi_width; // has more than half block size inside frame
+    let has_cols = offset.0.x + hbs < ts.mi_width;
     let has_rows = offset.0.y + hbs < ts.mi_height;
 
     if has_cols && has_rows {
