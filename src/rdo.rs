@@ -742,7 +742,8 @@ fn luma_chroma_mode_rdo<T: Pixel>(
             tile_bo,
             PartitionType::PARTITION_NONE,
             bsize,
-            fi.w_in_b, fi.h_in_b,
+            fi.w_in_b,
+            fi.h_in_b,
           );
         }
 
@@ -814,13 +815,13 @@ fn luma_chroma_mode_rdo<T: Pixel>(
     zero_distortion
   };
 
-    // Don't skip when using intra modes
-    let zero_distortion =
-      if !luma_mode_is_intra { chroma_rdo(true) } else { false };
-    // early skip
-    if !zero_distortion {
-      chroma_rdo(false);
-    }
+  // Don't skip when using intra modes
+  let zero_distortion =
+    if !luma_mode_is_intra { chroma_rdo(true) } else { false };
+  // early skip
+  if !zero_distortion {
+    chroma_rdo(false);
+  }
 }
 
 // RDO-based mode decision
@@ -874,7 +875,11 @@ pub fn rdo_mode_decision<T: Pixel>(
     );
   }
 
-  if false && best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
+  if false
+    && best.pred_mode_luma.is_intra()
+    && is_chroma_block
+    && bsize.cfl_allowed()
+  {
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
@@ -1672,10 +1677,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
     }),
   ];
 
-  let partitions = get_sub_partitions(
-    &four_partitions,
-    partition,
-  );
+  let partitions = get_sub_partitions(&four_partitions, partition);
 
   let pmv_idxs = partitions
     .iter()
@@ -1714,7 +1716,14 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
         let w: &mut W =
           if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
-        cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize, fi.w_in_b, fi.h_in_b);
+        cw.write_partition(
+          w,
+          offset,
+          PartitionType::PARTITION_NONE,
+          subsize,
+          fi.w_in_b,
+          fi.h_in_b,
+        );
       }
       encode_block_with_modes(
         fi,
