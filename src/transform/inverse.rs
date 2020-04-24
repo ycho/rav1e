@@ -1649,7 +1649,7 @@ pub(crate) mod rust {
       txfm_fn(&temp_in, &mut temp_out, range);
       for (temp, out) in temp_out
         .iter()
-      .zip(output.rows_iter_mut().map(|row| &mut row[c]).take(height))
+        .zip(output.rows_iter_mut().map(|row| &mut row[c]).take(height))
       {
         let v: i32 = (*out).as_();
         let v = clamp(v + round_shift(*temp, 4), 0, (1 << bd) - 1);
