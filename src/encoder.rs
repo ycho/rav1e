@@ -1086,11 +1086,11 @@ fn diff2<T: Pixel>(
   for y in 0..visible_h {
     for x in 0..visible_w {
       unsafe {
-      let v1 = src1.data_ptr().add(y * stride1 + x);
-      let v2 = src2.data_ptr().add(y * stride2 + x);
-      let diff = i16::cast_from(*v1) - i16::cast_from(*v2);
-      debug_assert!(-255 <= diff && diff <= 255);
-      dst[y * width + x] = diff;
+        let v1 = src1.data_ptr().add(y * stride1 + x);
+        let v2 = src2.data_ptr().add(y * stride2 + x);
+        let diff = i16::cast_from(*v1) - i16::cast_from(*v2);
+        debug_assert!(-255 <= diff && diff <= 255);
+        dst[y * width + x] = diff;
       }
     }
   }
@@ -1211,7 +1211,8 @@ pub fn encode_tx_block<T: Pixel>(
 
   let coded_tx_area = av1_get_coded_tx_size(tx_size).area();
   //let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
-  let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::new([0i16; 64 * 64]);
+  let mut residual_storage: Aligned<[i16; 64 * 64]> =
+    Aligned::new([0i16; 64 * 64]);
   let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
     Aligned::uninitialized();
   let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
@@ -1235,13 +1236,13 @@ pub fn encode_tx_block<T: Pixel>(
   );
 
   if false {
-  diff(
-    residual,
-    &ts.input_tile.planes[p].subregion(area),
-    &rec.subregion(area),
-    tx_size.width(),
-    tx_size.height(),
-  );
+    diff(
+      residual,
+      &ts.input_tile.planes[p].subregion(area),
+      &rec.subregion(area),
+      tx_size.width(),
+      tx_size.height(),
+    );
   } else {
     diff2(
       residual,
@@ -2356,7 +2357,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     part_modes: ArrayVec::new(),
   };
 
-  if tile_bo.0.x >= fi.w_in_b|| tile_bo.0.y >= fi.h_in_b {
+  if tile_bo.0.x >= fi.w_in_b || tile_bo.0.y >= fi.h_in_b {
     return rdo_output;
   }
 
@@ -2391,7 +2392,14 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     let cost = if bsize >= BlockSize::BLOCK_8X8 && is_square {
       let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
       let tell = w.tell_frac();
-      cw.write_partition(w, tile_bo, PartitionType::PARTITION_NONE, bsize, fi.w_in_b, fi.h_in_b);
+      cw.write_partition(
+        w,
+        tile_bo,
+        PartitionType::PARTITION_NONE,
+        bsize,
+        fi.w_in_b,
+        fi.h_in_b,
+      );
       compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero())
     } else {
       0.0
@@ -2460,21 +2468,26 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         continue;
       }
       if !fi.config.speed_settings.non_square_partition
-      && (partition == PartitionType::PARTITION_HORZ
-        || partition == PartitionType::PARTITION_VERT)
+        && (partition == PartitionType::PARTITION_HORZ
+          || partition == PartitionType::PARTITION_VERT)
       {
         continue;
       }
 
       if must_split {
         debug_assert!(partition != PartitionType::PARTITION_NONE);
-        if !has_rows && !has_cols && partition != PartitionType::PARTITION_SPLIT {
+        if !has_rows
+          && !has_cols
+          && partition != PartitionType::PARTITION_SPLIT
+        {
           continue;
         };
-        if !has_rows && has_cols && partition == PartitionType::PARTITION_VERT {
+        if !has_rows && has_cols && partition == PartitionType::PARTITION_VERT
+        {
           continue;
         };
-        if has_rows && !has_cols && partition == PartitionType::PARTITION_HORZ {
+        if has_rows && !has_cols && partition == PartitionType::PARTITION_HORZ
+        {
           continue;
         };
       }
@@ -2588,7 +2601,14 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       if bsize >= BlockSize::BLOCK_8X8 {
         let w: &mut W =
           if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
-        cw.write_partition(w, tile_bo, best_partition, bsize, fi.w_in_b, fi.h_in_b);
+        cw.write_partition(
+          w,
+          tile_bo,
+          best_partition,
+          bsize,
+          fi.w_in_b,
+          fi.h_in_b,
+        );
       }
       for mode in rdo_output.part_modes.clone() {
         assert!(subsize == mode.bsize);
@@ -2650,7 +2670,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   block_output: &Option<PartitionGroupParameters>, pmv_idx: usize,
   inter_cfg: &InterConfig,
 ) {
-  if tile_bo.0.x >= fi.w_in_b|| tile_bo.0.y >= fi.h_in_b {
+  if tile_bo.0.x >= fi.w_in_b || tile_bo.0.y >= fi.h_in_b {
     return;
   }
   let is_square = bsize.is_sqr();
@@ -3023,7 +3043,10 @@ fn encode_tile_group<T: Pixel>(
 ) -> Vec<u8> {
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
-  let mut blocks = FrameBlocks::new(fi.sb_width << MIB_SIZE_LOG2, fi.sb_height << MIB_SIZE_LOG2);
+    let mut blocks = FrameBlocks::new(
+      fi.sb_width << MIB_SIZE_LOG2,
+      fi.sb_height << MIB_SIZE_LOG2,
+    );
   let ti = &fi.tiling;
 
   let initial_cdf = get_initial_cdfcontext(fi);
