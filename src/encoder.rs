@@ -2332,27 +2332,26 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     return rdo_output;
   }
 
-  let bsw = bsize.width_mi();
-  let bsh = bsize.height_mi();
   let is_square = bsize.is_sqr();
+  let hbs = bsize.width_mi() >> 1;
+  let has_cols = tile_bo.0.x + hbs < ts.mi_width; // has more than half block size inside frame
+  let has_rows = tile_bo.0.y + hbs < ts.mi_height;
 
   // TODO: Update for 128x128 superblocks
   assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
-  // Always split if the current partition is too large, i.e. right or bottom tile border
-  let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width
-    || tile_bo.0.y + bsh as usize > ts.mi_height
-    || bsize > fi.partition_range.max)
-    && is_square;
 
-  // must_split overrides the minimum partition size when applicable
+  let must_split =
+    is_square && (bsize > fi.partition_range.max || !has_cols || !has_rows);
+
   let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
     if fi.frame_type.has_inter() &&
-    fi.config.chroma_sampling != ChromaSampling::Cs420 &&
-    bsize <= BlockSize::BLOCK_8X8 {
-    false
-  } else {
-    (bsize > fi.partition_range.min && is_square) || must_split
-  };
+      fi.config.chroma_sampling != ChromaSampling::Cs420 &&
+      bsize <= BlockSize::BLOCK_8X8 {
+      false
+    } else {
+      (bsize > fi.partition_range.min && is_square) || must_split
+    };
+
   let mut best_partition = PartitionType::PARTITION_INVALID;
 
   let cw_checkpoint = cw.checkpoint();
@@ -2432,30 +2431,39 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       {
         continue;
       }
-
-      if must_split {
-        let cbw = (ts.mi_width - tile_bo.0.x).min(bsw); // clipped block width, i.e. having effective pixels
-        let cbh = (ts.mi_height - tile_bo.0.y).min(bsh);
-        let mut split_vert = false;
-        let mut split_horz = false;
-        if cbw == bsw / 2 && cbh == bsh {
-          split_vert = true;
-        }
-        if cbh == bsh / 2 && cbw == bsw {
-          split_horz = true;
-        }
-        if !split_horz && partition == PartitionType::PARTITION_HORZ {
-          continue;
-        };
-        if !split_vert && partition == PartitionType::PARTITION_VERT {
-          continue;
-        };
-      } else if !fi.config.speed_settings.non_square_partition
-        && (partition == PartitionType::PARTITION_HORZ
-          || partition == PartitionType::PARTITION_VERT)
+      if !fi.config.speed_settings.non_square_partition
+      && (partition == PartitionType::PARTITION_HORZ
+        || partition == PartitionType::PARTITION_VERT)
       {
         continue;
       }
+
+      if must_split {
+        debug_assert!(partition != PartitionType::PARTITION_NONE);
+        if !has_rows && !has_cols && partition != PartitionType::PARTITION_SPLIT {
+          continue;
+        };
+        if !has_rows && has_cols && partition == PartitionType::PARTITION_VERT {
+          continue;
+        };
+        if has_rows && !has_cols && partition == PartitionType::PARTITION_HORZ {
+          continue;
+        };
+      }
+
+      if !has_rows && has_cols {
+        debug_assert!(must_split);
+        debug_assert!(partition != PartitionType::PARTITION_VERT);
+      }
+      if has_rows && !has_cols {
+        debug_assert!(must_split);
+        debug_assert!(partition != PartitionType::PARTITION_HORZ);
+      }
+      if !has_rows && !has_cols {
+        debug_assert!(must_split);
+        debug_assert!(partition == PartitionType::PARTITION_SPLIT);
+      }
+
       cw.rollback(&cw_checkpoint);
       w_pre_cdef.rollback(&w_pre_checkpoint);
       w_post_cdef.rollback(&w_post_checkpoint);
@@ -2496,7 +2504,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       // If either of horz or vert partition types is being tested,
       // two partitioned rectangles, defined in 'partitions', of the current block
       // is passed to encode_partition_bottomup()
-      for offset in partitions {
+      for offset in &partitions {
         let child_rdo_output = encode_partition_bottomup(
           fi,
           ts,
@@ -2504,7 +2512,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           w_pre_cdef,
           w_post_cdef,
           subsize,
-          offset,
+          *offset,
           pmv_idx,
           best_rd,
           inter_cfg,
