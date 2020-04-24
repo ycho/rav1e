@@ -2335,7 +2335,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
   let is_square = bsize.is_sqr();
   let hbs = bsize.width_mi() >> 1;
-  let has_cols = tile_bo.0.x + hbs < ts.mi_width; // has more than half block size inside frame
+  let has_cols = tile_bo.0.x + hbs < ts.mi_width;
   let has_rows = tile_bo.0.y + hbs < ts.mi_height;
 
   // TODO: Update for 128x128 superblocks
@@ -2430,10 +2430,16 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   if can_split {
     debug_assert!(is_square);
 
-    for &partition in RAV1E_PARTITION_TYPES {
-      if partition == PartitionType::PARTITION_NONE {
-        continue;
+    let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
+    if fi.config.speed_settings.non_square_partition {
+      partition_types.push(PartitionType::PARTITION_HORZ);
+      if !(fi.sequence.chroma_sampling == ChromaSampling::Cs422) {
+        partition_types.push(PartitionType::PARTITION_VERT);
       }
+    }
+    partition_types.push(PartitionType::PARTITION_SPLIT);
+
+    for partition in partition_types {
       if fi.sequence.chroma_sampling == ChromaSampling::Cs422
         && partition == PartitionType::PARTITION_VERT
       {
@@ -2448,34 +2454,34 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
       if must_split {
         debug_assert!(partition != PartitionType::PARTITION_NONE);
-        if !has_rows
+        if (!has_rows
           && !has_cols
-          && partition != PartitionType::PARTITION_SPLIT
-        {
-          continue;
-        };
-        if !has_rows && has_cols && partition == PartitionType::PARTITION_VERT
-        {
-          continue;
-        };
-        if has_rows && !has_cols && partition == PartitionType::PARTITION_HORZ
+          && partition != PartitionType::PARTITION_SPLIT)
+          || (!has_rows
+            && has_cols
+            && partition == PartitionType::PARTITION_VERT)
+          || (has_rows
+            && !has_cols
+            && partition == PartitionType::PARTITION_HORZ)
         {
           continue;
         };
       }
 
-      if !has_rows && has_cols {
-        debug_assert!(must_split);
-        debug_assert!(partition != PartitionType::PARTITION_VERT);
-      }
-      if has_rows && !has_cols {
-        debug_assert!(must_split);
-        debug_assert!(partition != PartitionType::PARTITION_HORZ);
-      }
-      if !has_rows && !has_cols {
-        debug_assert!(must_split);
-        debug_assert!(partition == PartitionType::PARTITION_SPLIT);
-      }
+      // (!has_rows || !has_cols) --> must_split
+      debug_assert!((has_rows && has_cols) || must_split);
+      // (!has_rows && has_cols) --> partition != PartitionType::PARTITION_VERT
+      debug_assert!(
+        has_rows || !has_cols || (partition != PartitionType::PARTITION_VERT)
+      );
+      // (has_rows && !has_cols) --> partition != PartitionType::PARTITION_HORZ
+      debug_assert!(
+        !has_rows || has_cols || partition != PartitionType::PARTITION_HORZ
+      );
+      // (!has_rows && !has_cols) --> partition == PartitionType::PARTITION_SPLIT
+      debug_assert!(
+        has_rows || has_cols || partition == PartitionType::PARTITION_SPLIT
+      );
 
       cw.rollback(&cw_checkpoint);
       w_pre_cdef.rollback(&w_pre_checkpoint);
@@ -2648,7 +2654,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let is_square = bsize.is_sqr();
   let rdo_type = RDOType::PixelDistRealRate;
   let hbs = bsize.width_mi() >> 1;
-  let has_cols = tile_bo.0.x + hbs < ts.mi_width; // has more than half block size inside frame
+  let has_cols = tile_bo.0.x + hbs < ts.mi_width;
   let has_rows = tile_bo.0.y + hbs < ts.mi_height;
 
   // For DEBUG/TEST
