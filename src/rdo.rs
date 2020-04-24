@@ -1682,42 +1682,6 @@ pub fn get_sub_partitions(
   partition_offsets
 }
 
-pub fn get_sub_partitions_with_border_check(
-  four_partitions: &[TileBlockOffset; 4], partition: PartitionType,
-  mi_width: usize, mi_height: usize,
-) -> ArrayVec<[TileBlockOffset; 4]> {
-  let mut partition_offsets = ArrayVec::<[TileBlockOffset; 4]>::new();
-
-  partition_offsets.push(four_partitions[0]);
-
-  if partition == PARTITION_NONE {
-    return partition_offsets;
-  }
-
-  if (partition == PARTITION_VERT || partition == PARTITION_SPLIT)
-    && four_partitions[1].0.x < mi_width
-    && four_partitions[1].0.y < mi_height
-  {
-    partition_offsets.push(four_partitions[1]);
-  };
-
-  if (partition == PARTITION_HORZ || partition == PARTITION_SPLIT)
-    && four_partitions[2].0.x < mi_width
-    && four_partitions[2].0.y < mi_height
-  {
-    partition_offsets.push(four_partitions[2]);
-  };
-
-  if partition == PARTITION_SPLIT
-    && four_partitions[3].0.x < mi_width
-    && four_partitions[3].0.y < mi_height
-  {
-    partition_offsets.push(four_partitions[3]);
-  };
-
-  partition_offsets
-}
-
 #[inline(always)]
 fn rdo_partition_none<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
@@ -1769,10 +1733,6 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
     0.0
   };
 
-  //pmv = best_pred_modes[0].mvs[0];
-
-  // assert!(best_pred_modes.len() <= 4);
-
   let hbsw = subsize.width_mi(); // Half the block size width in blocks
   let hbsh = subsize.height_mi(); // Half the block size height in blocks
   let four_partitions = [
@@ -1790,11 +1750,10 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       y: tile_bo.0.y + hbsh as usize,
     }),
   ];
-  let partitions = get_sub_partitions_with_border_check(
+
+  let partitions = get_sub_partitions(
     &four_partitions,
     partition,
-    ts.mi_width,
-    ts.mi_height,
   );
 
   let pmv_idxs = partitions
