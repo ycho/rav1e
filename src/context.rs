@@ -1630,7 +1630,7 @@ impl<'a> BlockContext<'a> {
     &mut self, plane: usize, bo: TileBlockOffset, tx_size: TxSize,
     xdec: usize, ydec: usize, value: u8, visible_w: usize, visible_h: usize,
   ) {
-    /*for above in &mut self.above_coeff_context[plane][(bo.0.x >> xdec)..]
+    for above in &mut self.above_coeff_context[plane][(bo.0.x >> xdec)..]
       [..tx_size.width_mi()]
     {
       *above = value;
@@ -1640,8 +1640,8 @@ impl<'a> BlockContext<'a> {
       [..tx_size.height_mi()]
     {
       *left = value;
-    }*/
-    for x in 0..(visible_w >> 2) {
+    }
+    /*for x in 0..(visible_w >> 2) {
       self.above_coeff_context[plane][(bo.0.x >> xdec) + x] = value;
     }
     if tx_size.width_mi() > (visible_w >> 2) {
@@ -1658,7 +1658,7 @@ impl<'a> BlockContext<'a> {
       for y in (visible_h >> 2)..tx_size.height_mi() {
         self.left_coeff_context[plane][(bo_y >> ydec) + y] = 0;
       }
-    }
+    }*/
   }
 
   fn reset_left_coeff_context(&mut self, plane: usize) {
@@ -1836,7 +1836,8 @@ impl<'a> BlockContext<'a> {
 
   pub fn get_txb_ctx(
     &self, plane_bsize: BlockSize, tx_size: TxSize, plane: usize,
-    bo: TileBlockOffset, xdec: usize, ydec: usize,
+    bo: TileBlockOffset, xdec: usize, ydec: usize, visible_w: usize,
+    visible_h: usize,
   ) -> TXB_CTX {
     let mut txb_ctx = TXB_CTX { txb_skip_ctx: 0, dc_sign_ctx: 0 };
     const MAX_TX_SIZE_UNIT: usize = 16;
@@ -1851,9 +1852,9 @@ impl<'a> BlockContext<'a> {
     let txb_h_unit = tx_size.height_mi();
 
     let above_ctxs =
-      &self.above_coeff_context[plane][(bo.0.x >> xdec)..][..txb_w_unit];
-    let left_ctxs =
-      &self.left_coeff_context[plane][(bo.y_in_sb() >> ydec)..][..txb_h_unit];
+      &self.above_coeff_context[plane][(bo.0.x >> xdec)..][..visible_w >> 2];
+    let left_ctxs = &self.left_coeff_context[plane][(bo.y_in_sb() >> ydec)..]
+      [..visible_h >> 2];
 
     // Decide txb_ctx.dc_sign_ctx
     for &ctx in above_ctxs {
@@ -4186,8 +4187,16 @@ impl<'a> ContextWriter<'a> {
     let mut cul_level = coeffs.iter().map(|c| u32::cast_from(c.abs())).sum();
 
     let txs_ctx = Self::get_txsize_entropy_ctx(tx_size);
-    let txb_ctx =
-      self.bc.get_txb_ctx(plane_bsize, tx_size, plane, bo, xdec, ydec);
+    let txb_ctx = self.bc.get_txb_ctx(
+      plane_bsize,
+      tx_size,
+      plane,
+      bo,
+      xdec,
+      ydec,
+      visible_w,
+      visible_h,
+    );
 
     {
       let cdf = &mut self.fc.txb_skip_cdf[txs_ctx][txb_ctx.txb_skip_ctx];
