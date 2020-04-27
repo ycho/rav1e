@@ -3020,10 +3020,7 @@ fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
 fn encode_tile_group<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
-  let mut blocks = FrameBlocks::new(
-    fi.sb_width << MIB_SIZE_LOG2,
-    fi.sb_height << MIB_SIZE_LOG2,
-  );
+  let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
   let ti = &fi.tiling;
 
   let initial_cdf = get_initial_cdfcontext(fi);
