@@ -24,7 +24,6 @@ use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::PredictionMode;
 use crate::predict::PredictionMode::*;
-use crate::rdo::clip_visible_bsize;
 use crate::scan_order::*;
 use crate::tiling::*;
 use crate::token_cdfs::*;
@@ -1628,7 +1627,7 @@ impl<'a> BlockContext<'a> {
 
   fn set_coeff_context(
     &mut self, plane: usize, bo: TileBlockOffset, tx_size: TxSize,
-    xdec: usize, ydec: usize, value: u8, visible_w: usize, visible_h: usize,
+    xdec: usize, ydec: usize, value: u8,
   ) {
     for above in &mut self.above_coeff_context[plane][(bo.0.x >> xdec)..]
       [..tx_size.width_mi()]
@@ -1641,24 +1640,6 @@ impl<'a> BlockContext<'a> {
     {
       *left = value;
     }
-    /*for x in 0..(visible_w >> 2) {
-      self.above_coeff_context[plane][(bo.0.x >> xdec) + x] = value;
-    }
-    if tx_size.width_mi() > (visible_w >> 2) {
-      for x in (visible_w >> 2)..tx_size.width_mi() {
-        self.above_coeff_context[plane][(bo.0.x >> xdec) + x] = 0;
-      }
-    }
-
-    let bo_y = bo.y_in_sb();
-    for y in 0..(visible_h >> 2) {
-      self.left_coeff_context[plane][(bo_y >> ydec) + y] = value;
-    }
-    if tx_size.height_mi() > (visible_h >> 2) {
-      for y in (visible_h >> 2)..tx_size.height_mi() {
-        self.left_coeff_context[plane][(bo_y >> ydec) + y] = 0;
-      }
-    }*/
   }
 
   fn reset_left_coeff_context(&mut self, plane: usize) {
@@ -1848,8 +1829,6 @@ impl<'a> BlockContext<'a> {
       2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
     ];
     let mut dc_sign: i16 = 0;
-    let txb_w_unit = tx_size.width_mi();
-    let txb_h_unit = tx_size.height_mi();
 
     let above_ctxs =
       &self.above_coeff_context[plane][(bo.0.x >> xdec)..][..visible_w >> 2];
@@ -4204,8 +4183,6 @@ impl<'a> ContextWriter<'a> {
         xdec,
         ydec,
         0,
-        tx_size.width(),
-        tx_size.height(),
       );
       return false;
     }
@@ -4371,8 +4348,6 @@ impl<'a> ContextWriter<'a> {
       xdec,
       ydec,
       cul_level as u8,
-      visible_w,
-      visible_h,
     );
     true
   }
