@@ -2354,7 +2354,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     part_modes: ArrayVec::new(),
   };
 
-  if tile_bo.0.x >= fi.w_in_b || tile_bo.0.y >= fi.h_in_b {
+  if tile_bo.0.x >= ts.mi_width || tile_bo.0.y >= ts.mi_height {
     return rdo_output;
   }
 
@@ -2378,6 +2378,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       (bsize > fi.partition_range.min && is_square) || must_split
     };
 
+  assert!(bsize >= BlockSize::BLOCK_8X8 || !can_split);
+
   let mut best_partition = PartitionType::PARTITION_INVALID;
 
   let cw_checkpoint = cw.checkpoint();
@@ -2394,8 +2396,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         tile_bo,
         PartitionType::PARTITION_NONE,
         bsize,
-        fi.w_in_b,
-        fi.h_in_b,
+        ts.mi_width,
+        ts.mi_height,
       );
       compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero())
     } else {
@@ -2449,7 +2451,9 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         true,
       );
     }
-  }
+  } // if !must_split
+
+  let mut early_exit = false;
 
   // Test all partition types other than PARTITION_NONE by comparing their RD costs
   if can_split {
@@ -2457,42 +2461,18 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
     let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
     if fi.config.speed_settings.non_square_partition {
-      partition_types.push(PartitionType::PARTITION_HORZ);
+      if has_rows {
+        partition_types.push(PartitionType::PARTITION_HORZ);
+      }
       if !(fi.sequence.chroma_sampling == ChromaSampling::Cs422) {
+        if has_cols {
         partition_types.push(PartitionType::PARTITION_VERT);
+        }
       }
     }
     partition_types.push(PartitionType::PARTITION_SPLIT);
 
     for partition in partition_types {
-      if fi.sequence.chroma_sampling == ChromaSampling::Cs422
-        && partition == PartitionType::PARTITION_VERT
-      {
-        continue;
-      }
-      if !fi.config.speed_settings.non_square_partition
-        && (partition == PartitionType::PARTITION_HORZ
-          || partition == PartitionType::PARTITION_VERT)
-      {
-        continue;
-      }
-
-      if must_split {
-        debug_assert!(partition != PartitionType::PARTITION_NONE);
-        if (!has_rows
-          && !has_cols
-          && partition != PartitionType::PARTITION_SPLIT)
-          || (!has_rows
-            && has_cols
-            && partition == PartitionType::PARTITION_VERT)
-          || (has_rows
-            && !has_cols
-            && partition == PartitionType::PARTITION_HORZ)
-        {
-          continue;
-        };
-      }
-
       // (!has_rows || !has_cols) --> must_split
       debug_assert!((has_rows && has_cols) || must_split);
       // (!has_rows && has_cols) --> partition != PartitionType::PARTITION_VERT
@@ -2501,11 +2481,11 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       );
       // (has_rows && !has_cols) --> partition != PartitionType::PARTITION_HORZ
       debug_assert!(
-        !has_rows || has_cols || partition != PartitionType::PARTITION_HORZ
+        !has_rows || has_cols || (partition != PartitionType::PARTITION_HORZ)
       );
       // (!has_rows && !has_cols) --> partition == PartitionType::PARTITION_SPLIT
       debug_assert!(
-        has_rows || has_cols || partition == PartitionType::PARTITION_SPLIT
+        has_rows || has_cols || (partition == PartitionType::PARTITION_SPLIT)
       );
 
       cw.rollback(&cw_checkpoint);
@@ -2522,7 +2502,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         let w: &mut W =
           if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
         let tell = w.tell_frac();
-        cw.write_partition(w, tile_bo, partition, bsize, fi.w_in_b, fi.h_in_b);
+        cw.write_partition(w, tile_bo, partition, bsize, ts.mi_width, ts.mi_height);
         rd_cost =
           compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero());
       }
@@ -2543,12 +2523,14 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         }),
       ];
       let partitions = get_sub_partitions(&four_partitions, partition);
-      let mut early_exit = false;
 
       // If either of horz or vert partition types is being tested,
       // two partitioned rectangles, defined in 'partitions', of the current block
       // is passed to encode_partition_bottomup()
       for offset in &partitions {
+        if offset.0.x >= ts.mi_width || offset.0.y >= ts.mi_height {
+          continue;
+        }
         let child_rdo_output = encode_partition_bottomup(
           fi,
           ts,
@@ -2566,7 +2548,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
         if cost != std::f64::MAX {
           rd_cost += cost;
-          if fi.enable_early_exit
+          if !must_split && fi.enable_early_exit
             && (rd_cost >= best_rd || rd_cost >= ref_rd_cost)
           {
             assert!(cost != std::f64::MAX);
@@ -2588,12 +2570,11 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       }
     }
 
-    debug_assert!(best_partition != PartitionType::PARTITION_INVALID);
+    debug_assert!(early_exit || best_partition != PartitionType::PARTITION_INVALID);
 
     // If the best partition is not PARTITION_SPLIT, recode it
     if best_partition != PartitionType::PARTITION_SPLIT {
       assert!(!rdo_output.part_modes.is_empty());
-
       cw.rollback(&cw_checkpoint);
       w_pre_cdef.rollback(&w_pre_checkpoint);
       w_post_cdef.rollback(&w_post_checkpoint);
@@ -2609,8 +2590,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           tile_bo,
           best_partition,
           bsize,
-          fi.w_in_b,
-          fi.h_in_b,
+          ts.mi_width,
+          ts.mi_height,
         );
       }
       for mode in rdo_output.part_modes.clone() {
@@ -2641,7 +2622,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         );
       }
     }
-  }
+  } // if can_split {
 
   assert!(best_partition != PartitionType::PARTITION_INVALID);
 
@@ -2673,7 +2654,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   block_output: &Option<PartitionGroupParameters>, pmv_idx: usize,
   inter_cfg: &InterConfig,
 ) {
-  if tile_bo.0.x >= fi.w_in_b || tile_bo.0.y >= fi.h_in_b {
+  if tile_bo.0.x >= ts.mi_width || tile_bo.0.y >= ts.mi_height {
     return;
   }
   let is_square = bsize.is_sqr();
@@ -2681,19 +2662,6 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let hbs = bsize.width_mi() >> 1;
   let has_cols = tile_bo.0.x + hbs < ts.mi_width;
   let has_rows = tile_bo.0.y + hbs < ts.mi_height;
-
-  // For DEBUG/TEST
-  if tile_bo.0.y + hbs * 2 > ts.mi_height {
-    let _test_y = true;
-  }
-  if tile_bo.0.x + hbs * 2 > ts.mi_width {
-    let _test_x = true;
-  }
-  if tile_bo.0.y + hbs * 2 > ts.mi_height
-    && tile_bo.0.x + hbs * 2 > ts.mi_width
-  {
-    let _test_yx = true;
-  }
 
   // TODO: Update for 128x128 superblocks
   assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
@@ -2759,7 +2727,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   if bsize >= BlockSize::BLOCK_8X8 && is_square {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
-    cw.write_partition(w, tile_bo, partition, bsize, fi.w_in_b, fi.h_in_b);
+    cw.write_partition(w, tile_bo, partition, bsize, ts.mi_width, ts.mi_height);
   }
 
   match partition {
