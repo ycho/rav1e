@@ -1200,7 +1200,7 @@ pub fn encode_tx_block<T: Pixel>(
       pred_intra_param,
       ief_params,
       &edge_buf,
-      CpuFeatureLevel::RUST, //fi.cpu_feature_level,
+      fi.cpu_feature_level,
     );
   }
 
