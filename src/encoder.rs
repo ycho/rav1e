@@ -2441,7 +2441,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       }
       if !(fi.sequence.chroma_sampling == ChromaSampling::Cs422) {
         if has_rows {
-        partition_types.push(PartitionType::PARTITION_VERT);
+          partition_types.push(PartitionType::PARTITION_VERT);
         }
       }
     }
@@ -2477,7 +2477,14 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         let w: &mut W =
           if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
         let tell = w.tell_frac();
-        cw.write_partition(w, tile_bo, partition, bsize, ts.mi_width, ts.mi_height);
+        cw.write_partition(
+          w,
+          tile_bo,
+          partition,
+          bsize,
+          ts.mi_width,
+          ts.mi_height,
+        );
         rd_cost =
           compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero());
       }
@@ -2523,7 +2530,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
         if cost != std::f64::MAX {
           rd_cost += cost;
-          if !must_split && fi.enable_early_exit
+          if !must_split
+            && fi.enable_early_exit
             && (rd_cost >= best_rd || rd_cost >= ref_rd_cost)
           {
             assert!(cost != std::f64::MAX);
@@ -2545,7 +2553,9 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       }
     }
 
-    debug_assert!(early_exit || best_partition != PartitionType::PARTITION_INVALID);
+    debug_assert!(
+      early_exit || best_partition != PartitionType::PARTITION_INVALID
+    );
 
     // If the best partition is not PARTITION_SPLIT, recode it
     if best_partition != PartitionType::PARTITION_SPLIT {
@@ -2702,7 +2712,14 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   if bsize >= BlockSize::BLOCK_8X8 && is_square {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
-    cw.write_partition(w, tile_bo, partition, bsize, ts.mi_width, ts.mi_height);
+    cw.write_partition(
+      w,
+      tile_bo,
+      partition,
+      bsize,
+      ts.mi_width,
+      ts.mi_height,
+    );
   }
 
   match partition {
