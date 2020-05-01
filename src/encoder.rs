@@ -238,7 +238,7 @@ impl Sequence {
       still_picture: config.still_picture,
       reduced_still_picture_hdr: config.still_picture,
       enable_filter_intra: false,
-      enable_intra_edge_filter: false, //true,
+      enable_intra_edge_filter: true,
       enable_interintra_compound: false,
       enable_masked_compound: false,
       enable_dual_filter: false,
