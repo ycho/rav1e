@@ -886,11 +886,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     );
   }
 
-  if false
-    && best.pred_mode_luma.is_intra()
-    && is_chroma_block
-    && bsize.cfl_allowed()
-  {
+  if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
