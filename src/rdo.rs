@@ -752,8 +752,8 @@ fn luma_chroma_mode_rdo<T: Pixel>(
             tile_bo,
             PartitionType::PARTITION_NONE,
             bsize,
-            fi.w_in_b,
-            fi.h_in_b,
+            ts.mi_width,
+            ts.mi_height,
           );
         }
 
@@ -1694,6 +1694,8 @@ fn rdo_partition_none<T: Pixel>(
   pmv_idx: usize, inter_cfg: &InterConfig,
   child_modes: &mut ArrayVec<[PartitionParameters; 4]>,
 ) -> Option<f64> {
+  debug_assert!(tile_bo.0.x < ts.mi_width && tile_bo.0.y < ts.mi_height);
+ 
   let pmv_inner_idx = if bsize > BlockSize::BLOCK_32X32 {
     0
   } else {
@@ -1725,6 +1727,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   inter_cfg: &InterConfig, partition: PartitionType, rdo_type: RDOType,
   best_rd: f64, child_modes: &mut ArrayVec<[PartitionParameters; 4]>,
 ) -> Option<f64> {
+  debug_assert!(tile_bo.0.x < ts.mi_width && tile_bo.0.y < ts.mi_height);
   let subsize = bsize.subsize(partition);
 
   debug_assert!(subsize != BlockSize::BLOCK_INVALID);
@@ -1732,7 +1735,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   let cost = if bsize >= BlockSize::BLOCK_8X8 {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     let tell = w.tell_frac();
-    cw.write_partition(w, tile_bo, partition, bsize, fi.w_in_b, fi.h_in_b);
+    cw.write_partition(w, tile_bo, partition, bsize, ts.mi_width, ts.mi_height);
     compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero())
   } else {
     0.0
@@ -1800,8 +1803,8 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
           offset,
           PartitionType::PARTITION_NONE,
           subsize,
-          fi.w_in_b,
-          fi.h_in_b,
+          ts.mi_width,
+          ts.mi_height,
         );
       }
       encode_block_with_modes(

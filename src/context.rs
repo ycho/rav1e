@@ -3111,29 +3111,22 @@ impl<'a> ContextWriter<'a> {
     });
     // clamp mvs
     for mv in mv_stack {
-      //let blk_w = bsize.width();
-      //let blk_h = bsize.height();
-      let (blk_w, blk_h) = clip_visible_bsize(
-        (fi.width + 3) >> 2,
-        (fi.height + 3) >> 2,
-        bsize,
-        frame_bo.0.x,
-        frame_bo.0.y,
-      );
+      let blk_w = bsize.width();
+      let blk_h = bsize.height();
       let border_w = 128 + blk_w as isize * 8;
       let border_h = 128 + blk_h as isize * 8;
       let mvx_min =
         -(frame_bo.0.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let mvx_max = (self.bc.blocks.frame_cols()
-        - frame_bo.0.x
-        - blk_w / MI_SIZE) as isize
+      let mvx_max = ((self.bc.blocks.frame_cols()
+        - frame_bo.0.x) as isize
+        - (blk_w / MI_SIZE) as isize)
         * (8 * MI_SIZE) as isize
         + border_w;
       let mvy_min =
         -(frame_bo.0.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let mvy_max = (self.bc.blocks.frame_rows()
-        - frame_bo.0.y
-        - blk_h / MI_SIZE) as isize
+      let mvy_max = ((self.bc.blocks.frame_rows()
+        - frame_bo.0.y) as isize
+        - (blk_h / MI_SIZE) as isize)
         * (8 * MI_SIZE) as isize
         + border_h;
       mv.this_mv.row =
