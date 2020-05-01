@@ -18,7 +18,6 @@ use crate::mc::MotionVector;
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::PredictionMode;
-use crate::rdo::clip_visible_bsize;
 use crate::tiling::*;
 use crate::util::Pixel;
 use crate::FrameInvariants;
