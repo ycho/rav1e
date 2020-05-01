@@ -2436,11 +2436,11 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
     let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
     if fi.config.speed_settings.non_square_partition {
-      if has_rows {
+      if has_cols {
         partition_types.push(PartitionType::PARTITION_HORZ);
       }
       if !(fi.sequence.chroma_sampling == ChromaSampling::Cs422) {
-        if has_cols {
+        if has_rows {
         partition_types.push(PartitionType::PARTITION_VERT);
         }
       }
