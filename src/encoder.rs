@@ -53,8 +53,6 @@ use std::{fmt, io, mem};
 use crate::hawktracer::*;
 use crate::rayon::iter::*;
 
-use crate::cpu_features::CpuFeatureLevel;
-
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum CDEFSearchMethod {
@@ -1195,6 +1193,7 @@ pub fn encode_tx_block<T: Pixel>(
       fi.sequence.enable_intra_edge_filter,
       pred_intra_param,
     );
+    use crate::cpu_features::CpuFeatureLevel;
     mode.predict_intra(
       tile_rect,
       &mut rec.subregion_mut(area),
@@ -1204,7 +1203,7 @@ pub fn encode_tx_block<T: Pixel>(
       pred_intra_param,
       ief_params,
       &edge_buf,
-      CpuFeatureLevel::NATIVE, //fi.cpu_feature_level,
+      CpuFeatureLevel::RUST, //fi.cpu_feature_level,
     );
   }
 
@@ -1903,15 +1902,6 @@ pub fn luma_ac<T: Pixel>(
   bsize: BlockSize,
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let (visible_w, visible_h) = clip_visible_bsize(
-    (ts.width + 3) >> 2,
-    (ts.height + 3) >> 2,
-    bsize,
-    tile_bo.0.x,
-    tile_bo.0.y,
-  );
-  let (plane_visible_w, plane_visible_h) =
-    (visible_w >> xdec, visible_h >> ydec);
   let plane_bsize = bsize.subsampled_size(xdec, ydec);
   let bo = if bsize.is_sub8x8(xdec, ydec) {
     let offset = bsize.sub8x8_offset(xdec, ydec);
@@ -1923,8 +1913,8 @@ pub fn luma_ac<T: Pixel>(
   let luma = &rec.subregion(Area::BlockStartingAt { bo: bo.0 });
 
   let mut sum: i32 = 0;
-  for sub_y in 0..plane_visible_h {
-    for sub_x in 0..plane_visible_w {
+  for sub_y in 0..plane_bsize.height() {
+    for sub_x in 0..plane_bsize.width() {
       let y = sub_y << ydec;
       let x = sub_x << xdec;
       let mut sample: i16 = i16::cast_from(luma[y][x]);
@@ -1941,11 +1931,11 @@ pub fn luma_ac<T: Pixel>(
       sum += sample as i32;
     }
   }
-  //let shift = plane_bsize.width_log2() + plane_bsize.height_log2();
-  //let average = ((sum + (1 << (shift - 1))) >> shift) as i16;
-  let average = (sum / (plane_visible_w * plane_visible_h) as i32) as i16;
-  for sub_y in 0..plane_visible_h {
-    for sub_x in 0..plane_visible_w {
+  let shift = plane_bsize.width_log2() + plane_bsize.height_log2();
+  let average = ((sum + (1 << (shift - 1))) >> shift) as i16;
+
+  for sub_y in 0..plane_bsize.height() {
+    for sub_x in 0..plane_bsize.width() {
       ac[sub_y * plane_bsize.width() + sub_x] -= average;
     }
   }
