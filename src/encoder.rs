@@ -3013,9 +3013,6 @@ fn encode_tile_group<T: Pixel>(
 
   /* TODO: Don't apply if lossless */
   deblock_filter_optimize(fi, fs, &blocks);
-  // TEST: yushin: disable deblocking
-  fs.deblock.levels[0] = 0;
-  fs.deblock.levels[1] = 0;
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
     deblock_filter_frame(fi, fs, &blocks);
   }
