@@ -3102,15 +3102,13 @@ impl<'a> ContextWriter<'a> {
       let border_h = 128 + blk_h as isize * 8;
       let mvx_min =
         -(frame_bo.0.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let mvx_max = ((self.bc.blocks.frame_cols()
-        - frame_bo.0.x) as isize
+      let mvx_max = ((self.bc.blocks.frame_cols() - frame_bo.0.x) as isize
         - (blk_w / MI_SIZE) as isize)
         * (8 * MI_SIZE) as isize
         + border_w;
       let mvy_min =
         -(frame_bo.0.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let mvy_max = ((self.bc.blocks.frame_rows()
-        - frame_bo.0.y) as isize
+      let mvy_max = ((self.bc.blocks.frame_rows() - frame_bo.0.y) as isize
         - (blk_h / MI_SIZE) as isize)
         * (8 * MI_SIZE) as isize
         + border_h;
@@ -4170,14 +4168,7 @@ impl<'a> ContextWriter<'a> {
     }
 
     if eob == 0 {
-      self.bc.set_coeff_context(
-        plane,
-        bo,
-        tx_size,
-        xdec,
-        ydec,
-        0,
-      );
+      self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, 0);
       return false;
     }
 
@@ -4335,14 +4326,7 @@ impl<'a> ContextWriter<'a> {
 
     BlockContext::set_dc_sign(&mut cul_level, i32::cast_from(coeffs[0]));
 
-    self.bc.set_coeff_context(
-      plane,
-      bo,
-      tx_size,
-      xdec,
-      ydec,
-      cul_level as u8,
-    );
+    self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8);
     true
   }
 

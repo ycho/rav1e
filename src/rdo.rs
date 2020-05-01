@@ -1615,7 +1615,7 @@ fn rdo_partition_none<T: Pixel>(
   child_modes: &mut ArrayVec<[PartitionParameters; 4]>,
 ) -> Option<f64> {
   debug_assert!(tile_bo.0.x < ts.mi_width && tile_bo.0.y < ts.mi_height);
- 
+
   let pmv_inner_idx = if bsize > BlockSize::BLOCK_32X32 {
     0
   } else {
@@ -1655,7 +1655,14 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   let cost = if bsize >= BlockSize::BLOCK_8X8 {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     let tell = w.tell_frac();
-    cw.write_partition(w, tile_bo, partition, bsize, ts.mi_width, ts.mi_height);
+    cw.write_partition(
+      w,
+      tile_bo,
+      partition,
+      bsize,
+      ts.mi_width,
+      ts.mi_height,
+    );
     compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero())
   } else {
     0.0
