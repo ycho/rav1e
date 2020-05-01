@@ -1195,12 +1195,11 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   cw_checkpoint: &ContextWriterCheckpoint, rdo_type: RDOType,
   mut best: PartitionParameters, is_chroma_block: bool,
 ) -> PartitionParameters {
-  //let num_modes_rdo: usize;
-  let num_modes_rdo = 1 as usize;
+  let num_modes_rdo: usize;
   let mut modes = ArrayVec::<[_; INTRA_MODES]>::new();
 
   // Reduce number of prediction modes at higher speed levels
-  /*num_modes_rdo = if (fi.frame_type == FrameType::KEY
+  num_modes_rdo = if (fi.frame_type == FrameType::KEY
     && fi.config.speed_settings.prediction_modes
       >= PredictionModesSetting::ComplexKeyframes)
     || (fi.frame_type.has_inter()
@@ -1210,7 +1209,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     7
   } else {
     3
-  };*/
+  };
 
   let intra_mode_set = RAV1E_INTRA_MODES;
 
