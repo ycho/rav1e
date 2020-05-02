@@ -1333,7 +1333,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     );
   });
 
-  /*if fi.config.speed_settings.fine_directional_intra
+  if fi.config.speed_settings.fine_directional_intra
     && bsize >= BlockSize::BLOCK_8X8
   {
     // Find the best angle delta for the current best prediction mode
@@ -1381,7 +1381,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
         );
       }
     }
-  }*/
+  }
 
   best
 }
