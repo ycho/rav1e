@@ -730,7 +730,6 @@ pub(crate) mod rust {
       };*/
 
     let visible_w = width;
-    let visible_h = height;
 
     for y in 0..height {
       /*if output.rect().y as usize + y >= output.plane_cfg.height {
@@ -924,16 +923,12 @@ pub(crate) mod rust {
         );
       }
     }*/
-    let stride = output.plane_cfg.stride;
 
     for y in 0..height {
       for x in 0..width {
-        unsafe {
-          //let mut v: *const T = output.data_ptr().add(y * stride + x);
           let luma = ac[y * width + x];
           output[y][x] = T::cast_from(
             (avg + get_scaled_luma_q0(alpha, luma)).max(0).min(sample_max));
-        }
       }
     }
   }
