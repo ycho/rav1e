@@ -1405,7 +1405,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     );
   });
 
-  /*if fi.config.speed_settings.fine_directional_intra
+  if fi.config.speed_settings.fine_directional_intra
     && bsize >= BlockSize::BLOCK_8X8
   {
     // Find the best angle delta for the current best prediction mode
@@ -1452,7 +1452,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
         if chroma_deltas == 1 { 0 } else { j - MAX_ANGLE_DELTA as i8 };
       angle_delta_rdo(best_angle_delta_y, angle_delta_uv);
     }
-  }*/
+  }
 
   best
 }
