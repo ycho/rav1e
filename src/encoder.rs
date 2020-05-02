@@ -1199,7 +1199,7 @@ pub fn encode_tx_block<T: Pixel>(
       pred_intra_param,
       ief_params,
       &edge_buf,
-      fi.cpu_feature_level,//CpuFeatureLevel::RUST,
+      fi.cpu_feature_level, //CpuFeatureLevel::RUST,
     );
   }
 
@@ -1947,8 +1947,8 @@ pub fn luma_ac<T: Pixel>(
         debug_assert!(xdec != 0);
         sample +=
           i16::cast_from(luma[y + 1][x]) + i16::cast_from(luma[y + 1][x + 1]);
-          //i16::cast_from(*luma.data_ptr().add((y + 1) * stride + x))
-          //+ i16::cast_from(*luma.data_ptr().add((y + 1)* stride + x + 1));
+        //i16::cast_from(*luma.data_ptr().add((y + 1) * stride + x))
+        //+ i16::cast_from(*luma.data_ptr().add((y + 1)* stride + x + 1));
       }
       //}
       sample <<= 3 - xdec - ydec;
