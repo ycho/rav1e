@@ -1190,7 +1190,9 @@ pub fn encode_tx_block<T: Pixel>(
       fi.sequence.enable_intra_edge_filter,
       pred_intra_param,
     );
-    use crate::cpu_features::CpuFeatureLevel;
+
+    //use crate::cpu_features::CpuFeatureLevel;
+
     mode.predict_intra(
       tile_rect,
       &mut rec.subregion_mut(area),
