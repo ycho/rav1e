@@ -723,11 +723,11 @@ pub(crate) mod rust {
       line[..width].clone_from_slice(&above[..width])
     }*/
     /*let visible_w =
-      if output.rect().x as usize + width >= output.plane_cfg.width {
-        output.plane_cfg.width - output.rect().x as usize
-      } else {
-        width
-      };*/
+    if output.rect().x as usize + width >= output.plane_cfg.width {
+      output.plane_cfg.width - output.rect().x as usize
+    } else {
+      width
+    };*/
 
     let visible_w = width;
 
@@ -926,9 +926,10 @@ pub(crate) mod rust {
 
     for y in 0..height {
       for x in 0..width {
-          let luma = ac[y * width + x];
-          output[y][x] = T::cast_from(
-            (avg + get_scaled_luma_q0(alpha, luma)).max(0).min(sample_max));
+        let luma = ac[y * width + x];
+        output[y][x] = T::cast_from(
+          (avg + get_scaled_luma_q0(alpha, luma)).max(0).min(sample_max),
+        );
       }
     }
   }
