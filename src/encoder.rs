@@ -1916,7 +1916,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
 
 pub fn luma_ac<T: Pixel>(
   ac: &mut [i16], ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset,
-  bsize: BlockSize,
+  bsize: BlockSize, luma_tx_size: TxSize,
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let plane_bsize = bsize.subsampled_size(xdec, ydec);
@@ -1929,28 +1929,45 @@ pub fn luma_ac<T: Pixel>(
   let rec = &ts.rec.planes[0];
   let luma = &rec.subregion(Area::BlockStartingAt { bo: bo.0 });
 
-  //let stride = rec.plane_cfg.stride;
+  let (visible_luma_w, visible_luma_h) = clip_visible_bsize(
+    (ts.width + 3) >> 2,
+    (ts.height + 3) >> 2,
+    bsize,
+    tile_bo.0.x,
+    tile_bo.0.y,
+  );
+
+  let max_blk_w: usize;
+  let max_blk_h: usize;
+
+  if luma_tx_size.block_size() < bsize {
+    let luma_tx_w = luma_tx_size.width();
+    let luma_tx_h = luma_tx_size.height();
+    max_blk_w =
+      ((visible_luma_w + luma_tx_w - 1) / luma_tx_w) as usize * luma_tx_w;
+    max_blk_h =
+      ((visible_luma_h + luma_tx_h - 1) / luma_tx_h) as usize * luma_tx_h;
+  } else {
+    max_blk_w = bsize.width();
+    max_blk_h = bsize.height();
+  }
+
   let mut sum: i32 = 0;
   for sub_y in 0..plane_bsize.height() {
     for sub_x in 0..plane_bsize.width() {
-      let y = sub_y << ydec;
-      let x = sub_x << xdec;
-      //let mut sample: i16;
-      //unsafe {
+      let y_raw = sub_y << ydec;
+      let x_raw = sub_x << xdec;
+      let y = y_raw.min(max_blk_h - (1 << ydec));
+      let x = x_raw.min(max_blk_w - (1 << xdec));
       let mut sample: i16 = i16::cast_from(luma[y][x]);
-      //sample = i16::cast_from(*luma.data_ptr().add(y * stride + x));
       if xdec != 0 {
         sample += i16::cast_from(luma[y][x + 1]);
-        //sample += i16::cast_from(*luma.data_ptr().add(y * stride + x + 1));
       }
       if ydec != 0 {
         debug_assert!(xdec != 0);
         sample +=
           i16::cast_from(luma[y + 1][x]) + i16::cast_from(luma[y + 1][x + 1]);
-        //i16::cast_from(*luma.data_ptr().add((y + 1) * stride + x))
-        //+ i16::cast_from(*luma.data_ptr().add((y + 1)* stride + x + 1));
       }
-      //}
       sample <<= 3 - xdec - ydec;
       ac[sub_y * plane_bsize.width() + sub_x] = sample;
       sum += sample as i32;
@@ -2051,7 +2068,7 @@ pub fn write_tx_blocks<T: Pixel>(
   bh_uv /= uv_tx_size.height_mi();
 
   if chroma_mode.is_cfl() {
-    luma_ac(&mut ac.data, ts, tile_bo, bsize);
+    luma_ac(&mut ac.data, ts, tile_bo, bsize, tx_size);
   }
 
   if fi.config.chroma_sampling != ChromaSampling::Cs400

@@ -914,7 +914,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     );
     cw.rollback(&cw_checkpoint);
     if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
-      if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, fi) {
+      if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, best.tx_size, fi) {
         let wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
@@ -1459,7 +1459,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
 pub fn rdo_cfl_alpha<T: Pixel>(
   ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset, bsize: BlockSize,
-  fi: &FrameInvariants<T>,
+  luma_tx_size: TxSize, fi: &FrameInvariants<T>,
 ) -> Option<CFLParams> {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
@@ -1475,7 +1475,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   );
 
   let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
-  luma_ac(&mut ac.data, ts, tile_bo, bsize);
+  luma_ac(&mut ac.data, ts, tile_bo, bsize, luma_tx_size);
   let best_alpha: ArrayVec<[i16; 2]> = (1..3)
     .map(|p| {
       let &PlaneConfig { xdec, ydec, .. } = ts.rec.planes[p].plane_cfg;
