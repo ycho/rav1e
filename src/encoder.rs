@@ -1197,7 +1197,7 @@ pub fn encode_tx_block<T: Pixel>(
       pred_intra_param,
       ief_params,
       &edge_buf,
-      fi.cpu_feature_level,
+      fi.cpu_feature_level,//CpuFeatureLevel::RUST,
     );
   }
 
@@ -1927,20 +1927,28 @@ pub fn luma_ac<T: Pixel>(
   let rec = &ts.rec.planes[0];
   let luma = &rec.subregion(Area::BlockStartingAt { bo: bo.0 });
 
+  //let stride = rec.plane_cfg.stride;
   let mut sum: i32 = 0;
   for sub_y in 0..plane_bsize.height() {
     for sub_x in 0..plane_bsize.width() {
       let y = sub_y << ydec;
       let x = sub_x << xdec;
+      //let mut sample: i16;
+      //unsafe {
       let mut sample: i16 = i16::cast_from(luma[y][x]);
+      //sample = i16::cast_from(*luma.data_ptr().add(y * stride + x));
       if xdec != 0 {
         sample += i16::cast_from(luma[y][x + 1]);
+        //sample += i16::cast_from(*luma.data_ptr().add(y * stride + x + 1));
       }
       if ydec != 0 {
         debug_assert!(xdec != 0);
         sample +=
           i16::cast_from(luma[y + 1][x]) + i16::cast_from(luma[y + 1][x + 1]);
+          //i16::cast_from(*luma.data_ptr().add((y + 1) * stride + x))
+          //+ i16::cast_from(*luma.data_ptr().add((y + 1)* stride + x + 1));
       }
+      //}
       sample <<= 3 - xdec - ydec;
       ac[sub_y * plane_bsize.width() + sub_x] = sample;
       sum += sample as i32;
