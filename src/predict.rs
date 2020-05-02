@@ -40,16 +40,16 @@ pub static RAV1E_INTRA_MODES: &[PredictionMode] = &[
   PredictionMode::DC_PRED,
   PredictionMode::H_PRED,
   PredictionMode::V_PRED,
-  /*PredictionMode::SMOOTH_PRED,
+  PredictionMode::SMOOTH_PRED,
   PredictionMode::SMOOTH_H_PRED,
   PredictionMode::SMOOTH_V_PRED,
-  PredictionMode::PAETH_PRED,*/
-  /*PredictionMode::D45_PRED,
+  PredictionMode::PAETH_PRED,
+  PredictionMode::D45_PRED,
   PredictionMode::D135_PRED,
   PredictionMode::D113_PRED,
   PredictionMode::D157_PRED,
   PredictionMode::D203_PRED,
-  PredictionMode::D67_PRED,*/
+  PredictionMode::D67_PRED,
 ];
 
 pub static RAV1E_INTER_MODES_MINIMAL: &[PredictionMode] =
@@ -597,26 +597,19 @@ pub(crate) mod rust {
       / len;
     let avg = T::cast_from(avg);
 
-    // TEST whether rows_iter_mut() behave differently if clipped height is passed
-    /*let txh = if output.rect().y as usize + height > output.plane_cfg.height {
-      output.plane_cfg.height - output.rect().y as usize
-    } else {
-      height
-    };*/
-
     /*for line in output.rows_iter_mut().take(height) {
       for v in &mut line[..width] {
         *v = avg;
       }
     }*/
     for y in 0..height {
-      if output.rect().y as usize + y >= output.plane_cfg.height {
+      /*if output.rect().y as usize + y >= output.plane_cfg.height {
         break;
-      }
+      }*/
       for x in 0..width {
-        if output.rect().x as usize + x >= output.plane_cfg.width {
+        /*if output.rect().x as usize + x >= output.plane_cfg.width {
           break;
-        }
+        }*/
         output[y][x] = avg;
       }
     }
@@ -628,13 +621,13 @@ pub(crate) mod rust {
   ) {
     let v = T::cast_from(128u32 << (bit_depth - 8));
     for y in 0..height {
-      if output.rect().y as usize + y >= output.plane_cfg.height {
+      /*if output.rect().y as usize + y >= output.plane_cfg.height {
         break;
-      }
+      }*/
       for x in 0..width {
-        if output.rect().x as usize + x >= output.plane_cfg.width {
+        /*if output.rect().x as usize + x >= output.plane_cfg.width {
           break;
-        }
+        }*/
         output[y][x] = v;
       }
     }
@@ -653,13 +646,13 @@ pub(crate) mod rust {
       line[..width].iter_mut().for_each(|v| *v = avg);
     }*/
     for y in 0..height {
-      if output.rect().y as usize + y >= output.plane_cfg.height {
+      /*if output.rect().y as usize + y >= output.plane_cfg.height {
         break;
-      }
+      }*/
       for x in 0..width {
-        if output.rect().x as usize + x >= output.plane_cfg.width {
+        /*if output.rect().x as usize + x >= output.plane_cfg.width {
           break;
-        }
+        }*/
         output[y][x] = avg;
       }
     }
@@ -678,13 +671,13 @@ pub(crate) mod rust {
       line[..width].iter_mut().for_each(|v| *v = avg);
     }*/
     for y in 0..height {
-      if output.rect().y as usize + y >= output.plane_cfg.height {
+      /*if output.rect().y as usize + y >= output.plane_cfg.height {
         break;
-      }
+      }*/
       for x in 0..width {
-        if output.rect().x as usize + x >= output.plane_cfg.width {
+        /*if output.rect().x as usize + x >= output.plane_cfg.width {
           break;
-        }
+        }*/
         output[y][x] = avg;
       }
     }
@@ -699,7 +692,7 @@ pub(crate) mod rust {
         *v = *l;
       }
     }*/
-    let visible_h =
+    /*let visible_h =
       if output.rect().y as usize + height >= output.plane_cfg.height {
         output.plane_cfg.height - output.rect().y as usize
       } else {
@@ -711,7 +704,9 @@ pub(crate) mod rust {
         output.plane_cfg.width - output.rect().x as usize
       } else {
         width
-      };
+      };*/
+    let visible_w = width;
+    let visible_h = height;
 
     for y in 0..visible_h {
       for x in 0..visible_w {
@@ -727,17 +722,20 @@ pub(crate) mod rust {
     /*for line in output.rows_iter_mut().take(height) {
       line[..width].clone_from_slice(&above[..width])
     }*/
-    let visible_w =
+    /*let visible_w =
       if output.rect().x as usize + width >= output.plane_cfg.width {
         output.plane_cfg.width - output.rect().x as usize
       } else {
         width
-      };
+      };*/
+
+    let visible_w = width;
+    let visible_h = height;
 
     for y in 0..height {
-      if output.rect().y as usize + y >= output.plane_cfg.height {
+      /*if output.rect().y as usize + y >= output.plane_cfg.height {
         break;
-      }
+      }*/
       output[y][0..visible_w].clone_from_slice(&above[..visible_w]);
     }
   }
@@ -912,18 +910,30 @@ pub(crate) mod rust {
     assert!(32 >= width);
     assert!(ac.len() >= 32 * (height - 1) + width);
     assert!(output.plane_cfg.stride >= width);
-    assert!(output.rows_iter().len() >= height);
+    //assert!(output.rows_iter().len() >= height);
 
     let sample_max = (1 << bit_depth) - 1;
     let avg: i32 = output[0][0].into();
 
-    for (line, luma) in
+    /*for (line, luma) in
       output.rows_iter_mut().zip(ac.chunks(width)).take(height)
     {
       for (v, &l) in line[..width].iter_mut().zip(luma[..width].iter()) {
         *v = T::cast_from(
           (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max),
         );
+      }
+    }*/
+    let stride = output.plane_cfg.stride;
+
+    for y in 0..height {
+      for x in 0..width {
+        unsafe {
+          //let mut v: *const T = output.data_ptr().add(y * stride + x);
+          let luma = ac[y * width + x];
+          output[y][x] = T::cast_from(
+            (avg + get_scaled_luma_q0(alpha, luma)).max(0).min(sample_max));
+        }
       }
     }
   }

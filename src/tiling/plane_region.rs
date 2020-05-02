@@ -330,7 +330,7 @@ macro_rules! plane_region_common {
 
       #[inline(always)]
       fn index(&self, index: usize) -> &Self::Output {
-        assert!(index < self.rect.height);
+        //assert!(index < self.rect.height);
         unsafe {
           let ptr = self.data.add(index * self.plane_cfg.stride);
           slice::from_raw_parts(ptr, self.rect.width)
@@ -426,7 +426,7 @@ impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
 impl<T: Pixel> IndexMut<usize> for PlaneRegionMut<'_, T> {
   #[inline(always)]
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-    assert!(index < self.rect.height);
+    //assert!(index < self.rect.height);
     unsafe {
       let ptr = self.data.add(index * self.plane_cfg.stride);
       slice::from_raw_parts_mut(ptr, self.rect.width)
