@@ -886,12 +886,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     );
   }
 
-  if best.pred_mode_luma.is_intra()
-    && is_chroma_block
-    && bsize.cfl_allowed()
-    && ((best.tx_size.block_size() == bsize) ||
-    (tile_bo.0.x + bsize.width_mi() <= ts.mi_width
-    && tile_bo.0.y + bsize.height_mi() <= ts.mi_height))
+  if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed()
   {
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
