@@ -1176,6 +1176,7 @@ pub fn encode_tx_block<T: Pixel>(
     None
   };
 
+  let frame_bo = ts.to_frame_block_offset(tx_bo);
   let rec = &mut ts.rec.planes[p];
 
   if mode.is_intra() {
@@ -1231,12 +1232,13 @@ pub fn encode_tx_block<T: Pixel>(
   );
   let rcoeffs = &mut rcoeffs_storage.data[..coded_tx_area];
 
+  //let (visible_tx_w, visible_tx_h) = (tx_size.width(), tx_size.height());
   let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
-    (tile_rect.width + 3) >> 2,
-    (tile_rect.height + 3) >> 2,
+    fi.width >> xdec,
+    fi.height >> ydec,
     tx_size.block_size(),
-    tx_bo.0.x >> xdec,
-    tx_bo.0.y >> ydec,
+    (frame_bo.0.x << MI_SIZE_LOG2) >> xdec,
+    (frame_bo.0.y << MI_SIZE_LOG2) >> ydec,
   );
 
   if false {
@@ -1259,7 +1261,8 @@ pub fn encode_tx_block<T: Pixel>(
     );
   }
 
-  // TODO: If tx size != visible size, then fill residue for outside frame area as zeros
+  // TODO(yushin): When tx size != visible size, instead of init whole residual block everytime,
+  // consider filling residue for only outside frame area as zeros
 
   forward_transform(
     residual,
@@ -1287,8 +1290,8 @@ pub fn encode_tx_block<T: Pixel>(
       xdec,
       ydec,
       fi.use_reduced_tx_set,
-      visible_tx_w,
-      visible_tx_h,
+      visible_tx_w.align_power_of_two(2),
+      visible_tx_h.align_power_of_two(2),
     )
   } else {
     true
@@ -1901,7 +1904,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
 
 pub fn luma_ac<T: Pixel>(
   ac: &mut [i16], ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset,
-  bsize: BlockSize, tx_size: TxSize,
+  bsize: BlockSize, tx_size: TxSize, fi: &FrameInvariants<T>,
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let plane_bsize = bsize.subsampled_size(xdec, ydec);
@@ -1914,12 +1917,13 @@ pub fn luma_ac<T: Pixel>(
   let rec = &ts.rec.planes[0];
   let luma = &rec.subregion(Area::BlockStartingAt { bo: bo.0 });
 
+  let frame_bo = ts.to_frame_block_offset(bo);
   let (visible_luma_w, visible_luma_h) = clip_visible_bsize(
-    (ts.width + 3) >> 2,
-    (ts.height + 3) >> 2,
+    fi.width,
+    fi.height,
     bsize,
-    tile_bo.0.x,
-    tile_bo.0.y,
+    frame_bo.0.x << MI_SIZE_LOG2,
+    frame_bo.0.y << MI_SIZE_LOG2,
   );
 
   // Similar to 'MaxLumaW' and 'MaxLumaH' stated in https://aomediacodec.github.io/av1-spec/#transform-block-semantics
@@ -2057,7 +2061,7 @@ pub fn write_tx_blocks<T: Pixel>(
   bh_uv /= uv_tx_size.height_mi();
 
   if chroma_mode.is_cfl() {
-    luma_ac(&mut ac.data, ts, tile_bo, bsize, tx_size);
+    luma_ac(&mut ac.data, ts, tile_bo, bsize, tx_size, fi);
   }
 
   if bw_uv > 0 && bh_uv > 0 {

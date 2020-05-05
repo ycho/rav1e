@@ -46,6 +46,7 @@ use arrayvec::*;
 use itertools::izip;
 use std;
 use std::fmt;
+use v_frame::math::*;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum RDOType {
@@ -236,13 +237,10 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
   compute_bias: F,
 ) -> Distortion {
-  assert!(w & (MI_SIZE - 1) == 0);
-  assert!(h & (MI_SIZE - 1) == 0);
-
   // To bias the distortion correctly, compute it in blocks up to the size
   // importance block size in a non-subsampled plane.
-  let imp_block_w = IMPORTANCE_BLOCK_SIZE.min(w);
-  let imp_block_h = IMPORTANCE_BLOCK_SIZE.min(h);
+  let imp_block_w = IMPORTANCE_BLOCK_SIZE.min(w.align_power_of_two(2));
+  let imp_block_h = IMPORTANCE_BLOCK_SIZE.min(h.align_power_of_two(2));
   let imp_bsize = BlockSize::from_width_and_height(imp_block_w, imp_block_h);
   let block_w = imp_block_w >> src1.plane_cfg.xdec;
   let block_h = imp_block_h >> src1.plane_cfg.ydec;
@@ -284,15 +282,13 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
 }
 
 pub fn clip_visible_bsize(
-  w: usize, h: usize, bsize: BlockSize, x: usize, y: usize,
+  frame_w: usize, frame_h: usize, bsize: BlockSize, x: usize, y: usize,
 ) -> (usize, usize) {
-  let mut visible_w: usize =
-    if x + bsize.width_mi() > w { w - x } else { bsize.width_mi() };
-  let mut visible_h: usize =
-    if y + bsize.height_mi() > h { h - y } else { bsize.height_mi() };
+  let blk_w = bsize.width();
+  let blk_h = bsize.height();
 
-  visible_w *= 4;
-  visible_h *= 4;
+  let visible_w: usize = if x + blk_w > frame_w { frame_w - x } else { blk_w };
+  let visible_h: usize = if y + blk_h > frame_h { frame_h - y } else { blk_h };
 
   debug_assert!(visible_w > 0);
   debug_assert!(visible_h > 0);
@@ -308,17 +304,24 @@ fn compute_distortion<T: Pixel>(
   let area = Area::BlockStartingAt { bo: tile_bo.0 };
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
-  // clipped wxh, when on the frame border
+
+  // clip a block to have visible pixles only
+  let frame_bo = ts.to_frame_block_offset(tile_bo);
   let (visible_w, visible_h) = clip_visible_bsize(
-    (ts.width + 3) >> 2,
-    (ts.height + 3) >> 2,
+    fi.width,
+    fi.height,
     bsize,
-    tile_bo.0.x,
-    tile_bo.0.y,
+    frame_bo.0.x << MI_SIZE_LOG2,
+    frame_bo.0.y << MI_SIZE_LOG2,
   );
 
   let mut distortion = match fi.config.tune {
-    Tune::Psychovisual if bsize.width() >= 8 && bsize.height() >= 8 => {
+    Tune::Psychovisual
+      if bsize.width() >= 8
+        && bsize.height() >= 8
+        && (visible_w & 0x7 == 0)
+        && (visible_h & 0x7 == 0) =>
+    {
       cdef_dist_wxh(
         &input_region,
         &rec_region,
@@ -353,6 +356,9 @@ fn compute_distortion<T: Pixel>(
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
     let mask = !(MI_SIZE - 1);
+    // TODO(yushin): Review whether applying "&mask" is still correct with open partition
+    // FIXME(yushin): Maybe, correct version with open partition is:
+    // let mut w_uv = ((visible_w + xdec) >> xdec)
     let mut w_uv = (visible_w >> xdec) & mask;
     let mut h_uv = (visible_h >> ydec) & mask;
 
@@ -395,12 +401,26 @@ fn compute_tx_distortion<T: Pixel>(
   let area = Area::BlockStartingAt { bo: tile_bo.0 };
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
+
+  let (visible_w, visible_h) = if !skip {
+    (bsize.width(), bsize.height())
+  } else {
+    let frame_bo = ts.to_frame_block_offset(tile_bo);
+    clip_visible_bsize(
+      fi.width,
+      fi.height,
+      bsize,
+      frame_bo.0.x << MI_SIZE_LOG2,
+      frame_bo.0.y << MI_SIZE_LOG2,
+    )
+  };
+
   let mut distortion = if skip {
     sse_wxh(
       &input_region,
       &rec_region,
-      bsize.width(),
-      bsize.height(),
+      visible_w,
+      visible_h,
       |bias_area, bsize| {
         distortion_scale(
           fi,
@@ -417,8 +437,8 @@ fn compute_tx_distortion<T: Pixel>(
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
     let mask = !(MI_SIZE - 1);
-    let mut w_uv = (bsize.width() >> xdec) & mask;
-    let mut h_uv = (bsize.height() >> ydec) & mask;
+    let mut w_uv = (visible_w >> xdec) & mask;
+    let mut h_uv = (visible_h >> ydec) & mask;
 
     if (w_uv == 0 || h_uv == 0) && is_chroma_block {
       w_uv = MI_SIZE;
@@ -875,8 +895,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     );
   }
 
-  if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed()
-  {
+  if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
@@ -1395,17 +1414,17 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
   debug_assert!(bsize.subsampled_size(xdec, ydec) == uv_tx_size.block_size());
 
-  let tile_rect = ts.tile_rect().decimated(xdec, ydec);
+  let frame_bo = ts.to_frame_block_offset(tile_bo);
   let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
-    (tile_rect.width + 3) >> 2,
-    (tile_rect.height + 3) >> 2,
+    (fi.width + xdec) >> xdec,
+    (fi.height + ydec) >> ydec,
     uv_tx_size.block_size(),
-    tile_bo.0.x >> xdec,
-    tile_bo.0.y >> ydec,
+    (frame_bo.0.x << MI_SIZE_LOG2) >> xdec,
+    (frame_bo.0.y << MI_SIZE_LOG2) >> ydec,
   );
 
   let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
-  luma_ac(&mut ac.data, ts, tile_bo, bsize, luma_tx_size);
+  luma_ac(&mut ac.data, ts, tile_bo, bsize, luma_tx_size, fi);
   let best_alpha: ArrayVec<[i16; 2]> = (1..3)
     .map(|p| {
       let &PlaneConfig { xdec, ydec, .. } = ts.rec.planes[p].plane_cfg;
