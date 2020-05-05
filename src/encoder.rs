@@ -1901,7 +1901,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
 
 pub fn luma_ac<T: Pixel>(
   ac: &mut [i16], ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset,
-  bsize: BlockSize, luma_tx_size: TxSize,
+  bsize: BlockSize, tx_size: TxSize,
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let plane_bsize = bsize.subsampled_size(xdec, ydec);
@@ -1922,28 +1922,33 @@ pub fn luma_ac<T: Pixel>(
     tile_bo.0.y,
   );
 
-  let max_blk_w: usize;
-  let max_blk_h: usize;
+  // Similar to 'MaxLumaW' and 'MaxLumaH' stated in https://aomediacodec.github.io/av1-spec/#transform-block-semantics
+  let max_luma_w: usize;
+  let max_luma_h: usize;
 
-  if luma_tx_size.block_size() < bsize {
-    let luma_tx_w = luma_tx_size.width();
-    let luma_tx_h = luma_tx_size.height();
-    max_blk_w =
-      ((visible_luma_w + luma_tx_w - 1) / luma_tx_w) as usize * luma_tx_w;
-    max_blk_h =
-      ((visible_luma_h + luma_tx_h - 1) / luma_tx_h) as usize * luma_tx_h;
+  if bsize >= BlockSize::BLOCK_8X8 && tx_size.block_size() < bsize {
+    let txw_log2 = tx_size.width_log2();
+    let txh_log2 = tx_size.height_log2();
+    max_luma_w =
+      ((visible_luma_w + (1 << txw_log2) - 1) >> txw_log2) << txw_log2;
+    max_luma_h =
+      ((visible_luma_h + (1 << txh_log2) - 1) >> txh_log2) << txh_log2;
   } else {
-    max_blk_w = bsize.width();
-    max_blk_h = bsize.height();
+    max_luma_w = bsize.width();
+    max_luma_h = bsize.height();
   }
+
+  let max_luma_x: usize = max_luma_w.max(8) - (1 << xdec);
+  let max_luma_y: usize = max_luma_h.max(8) - (1 << ydec);
 
   let mut sum: i32 = 0;
   for sub_y in 0..plane_bsize.height() {
     for sub_x in 0..plane_bsize.width() {
-      let y_raw = sub_y << ydec;
-      let x_raw = sub_x << xdec;
-      let y = y_raw.min(max_blk_h - (1 << ydec));
-      let x = x_raw.min(max_blk_w - (1 << xdec));
+      // Refer to https://aomediacodec.github.io/av1-spec/#predict-chroma-from-luma-process
+      let luma_y = sub_y << ydec;
+      let luma_x = sub_x << xdec;
+      let y = luma_y.min(max_luma_y);
+      let x = luma_x.min(max_luma_x);
       let mut sample: i16 = i16::cast_from(luma[y][x]);
       if xdec != 0 {
         sample += i16::cast_from(luma[y][x + 1]);
