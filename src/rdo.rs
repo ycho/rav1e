@@ -353,13 +353,8 @@ fn compute_distortion<T: Pixel>(
 
   if !luma_only {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-
-    let mask = !(MI_SIZE - 1);
-    // TODO(yushin): Review whether applying "&mask" is still correct with open partition
-    // FIXME(yushin): Maybe, correct version with open partition is:
-    // let mut w_uv = ((visible_w + xdec) >> xdec)
-    let mut w_uv = (visible_w >> xdec) & mask;
-    let mut h_uv = (visible_h >> ydec) & mask;
+    let mut w_uv = (visible_w + xdec) >> xdec;
+    let mut h_uv = (visible_h + ydec) >> ydec;
 
     if (w_uv == 0 || h_uv == 0) && is_chroma_block {
       w_uv = MI_SIZE;
@@ -437,10 +432,8 @@ fn compute_tx_distortion<T: Pixel>(
 
   if !luma_only && skip {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-
-    let mask = !(MI_SIZE - 1);
-    let mut w_uv = (visible_w >> xdec) & mask;
-    let mut h_uv = (visible_h >> ydec) & mask;
+    let mut w_uv = (visible_w + xdec) >> xdec;
+    let mut h_uv = (visible_h + ydec) >> ydec;
 
     if (w_uv == 0 || h_uv == 0) && is_chroma_block {
       w_uv = MI_SIZE;
