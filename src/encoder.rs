@@ -2043,7 +2043,7 @@ pub fn write_tx_blocks<T: Pixel>(
     }
   }
 
-  if luma_only {
+  if !do_chroma || luma_only {
     return (partition_has_coeff, tx_dist);
   };
 
@@ -2065,6 +2065,7 @@ pub fn write_tx_blocks<T: Pixel>(
   }
 
   if bw_uv > 0 && bh_uv > 0 {
+    debug_assert!(has_chroma(tile_bo, bsize, xdec, ydec));
     let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
       TxType::DCT_DCT
     } else {
@@ -2201,7 +2202,7 @@ pub fn write_tx_tree<T: Pixel>(
     }
   }
 
-  if luma_only {
+  if !has_chroma(tile_bo, bsize, xdec, ydec) || luma_only {
     return (partition_has_coeff, tx_dist);
   };
 
@@ -2212,7 +2213,7 @@ pub fn write_tx_tree<T: Pixel>(
   let mut bw_uv = max_tx_size.width_mi() >> xdec;
   let mut bh_uv = max_tx_size.height_mi() >> ydec;
 
-  if (bw_uv == 0 || bh_uv == 0) && has_chroma(tile_bo, bsize, xdec, ydec) {
+  if bw_uv == 0 || bh_uv == 0 {
     bw_uv = 1;
     bh_uv = 1;
   }
@@ -2221,6 +2222,7 @@ pub fn write_tx_tree<T: Pixel>(
   bh_uv /= uv_tx_size.height_mi();
 
   if bw_uv > 0 && bh_uv > 0 {
+    debug_assert!(has_chroma(tile_bo, bsize, xdec, ydec));
     let uv_tx_type =
       if partition_has_coeff { tx_type } else { TxType::DCT_DCT }; // if inter mode, uv_tx_type == tx_type
 

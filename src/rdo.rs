@@ -237,24 +237,39 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
   compute_bias: F,
 ) -> Distortion {
-  // To bias the distortion correctly, compute it in blocks up to the size
+  // To bias the distortion correctly, compute it in blocks up to the
   // importance block size in a non-subsampled plane.
   let imp_block_w = IMPORTANCE_BLOCK_SIZE.min(w.align_power_of_two(2));
   let imp_block_h = IMPORTANCE_BLOCK_SIZE.min(h.align_power_of_two(2));
   let imp_bsize = BlockSize::from_width_and_height(imp_block_w, imp_block_h);
   let block_w = imp_block_w >> src1.plane_cfg.xdec;
   let block_h = imp_block_h >> src1.plane_cfg.ydec;
+  let is_w4 = w == w.align_power_of_two(2);
+  let is_h4 = h == h.align_power_of_two(2);
+  let n_imp_blocks_w = (w + (block_w >> 1)) / block_w;
+  let n_imp_blocks_h = (h + (block_h >> 1)) / block_h;
+  let mut biased_sse = Distortion::zero();
 
-  let mut sse = Distortion::zero();
-  for block_y in 0..h / block_h {
-    for block_x in 0..w / block_w {
-      let mut value = 0;
+  for block_y in 0..n_imp_blocks_h {
+    let vis_bh = if block_y == n_imp_blocks_h - 1 && !is_h4 {
+      h - block_y * block_h
+    } else {
+      block_h
+    };
+    for block_x in 0..n_imp_blocks_w {
+      let mut imp_blk_sse = 0;
+      let vis_bw = if block_x == n_imp_blocks_w - 1 && !is_w4 {
+        w - block_x * block_w
+      } else {
+        block_w
+      };
+      let src_offset_x = block_x * block_w;
 
-      for j in 0..block_h {
-        let s1 = &src1[block_y * block_h + j]
-          [block_x * block_w..(block_x + 1) * block_w];
-        let s2 = &src2[block_y * block_h + j]
-          [block_x * block_w..(block_x + 1) * block_w];
+      for j in 0..vis_bh {
+        let s1 =
+          &src1[block_y * block_h + j][src_offset_x..src_offset_x + vis_bw];
+        let s2 =
+          &src2[block_y * block_h + j][src_offset_x..src_offset_x + vis_bw];
 
         let row_sse = s1
           .iter()
@@ -264,7 +279,7 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
             (c * c) as u32
           })
           .sum::<u32>();
-        value += row_sse as u64;
+        imp_blk_sse += row_sse as u64;
       }
 
       let bias = compute_bias(
@@ -275,10 +290,10 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
         },
         imp_bsize,
       );
-      sse += RawDistortion::new(value) * bias;
+      biased_sse += RawDistortion::new(imp_blk_sse) * bias;
     }
   }
-  sse
+  biased_sse
 }
 
 pub fn clip_visible_bsize(
@@ -352,41 +367,36 @@ fn compute_distortion<T: Pixel>(
     ),
   } * fi.dist_scale[0];
 
-  if !luma_only {
+  if is_chroma_block && !luma_only {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-
-    let mask = !(MI_SIZE - 1);
-    // TODO(yushin): Review whether applying "&mask" is still correct with open partition
-    // FIXME(yushin): Maybe, correct version with open partition is:
-    // let mut w_uv = ((visible_w + xdec) >> xdec)
-    let mut w_uv = (visible_w >> xdec) & mask;
-    let mut h_uv = (visible_h >> ydec) & mask;
-
-    if (w_uv == 0 || h_uv == 0) && is_chroma_block {
-      w_uv = MI_SIZE;
-      h_uv = MI_SIZE;
-    }
-
-    // Add chroma distortion only when it is available
-    if w_uv > 0 && h_uv > 0 {
-      for p in 1..3 {
-        let input_region = ts.input_tile.planes[p].subregion(area);
-        let rec_region = ts.rec.planes[p].subregion(area);
-        distortion += sse_wxh(
-          &input_region,
-          &rec_region,
-          w_uv,
-          h_uv,
-          |bias_area, bsize| {
-            distortion_scale(
-              fi,
-              input_region.subregion(bias_area).frame_block_offset(),
-              bsize,
-            )
-          },
-        ) * fi.dist_scale[p];
-      }
+    let chroma_w = if bsize.width() >= 8 || xdec == 0 {
+      (visible_w + xdec) >> xdec
+    } else {
+      (4 + visible_w + xdec) >> xdec
     };
+    let chroma_h = if bsize.height() >= 8 || ydec == 0 {
+      (visible_h + ydec) >> xdec
+    } else {
+      (4 + visible_h + ydec) >> ydec
+    };
+
+    for p in 1..3 {
+      let input_region = ts.input_tile.planes[p].subregion(area);
+      let rec_region = ts.rec.planes[p].subregion(area);
+      distortion += sse_wxh(
+        &input_region,
+        &rec_region,
+        chroma_w,
+        chroma_h,
+        |bias_area, bsize| {
+          distortion_scale(
+            fi,
+            input_region.subregion(bias_area).frame_block_offset(),
+            bsize,
+          )
+        },
+      ) * fi.dist_scale[p];
+    }
   }
   distortion
 }
@@ -433,37 +443,35 @@ fn compute_tx_distortion<T: Pixel>(
     tx_dist
   };
 
-  if !luma_only && skip {
+  if is_chroma_block && !luma_only && skip {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
+    let chroma_w = if bsize.width() >= 8 || xdec == 0 {
+      (visible_w + xdec) >> xdec
+    } else {
+      (4 + visible_w + xdec) >> xdec
+    };
+    let chroma_h = if bsize.height() >= 8 || ydec == 0 {
+      (visible_h + ydec) >> xdec
+    } else {
+      (4 + visible_h + ydec) >> ydec
+    };
 
-    let mask = !(MI_SIZE - 1);
-    let mut w_uv = (visible_w >> xdec) & mask;
-    let mut h_uv = (visible_h >> ydec) & mask;
-
-    if (w_uv == 0 || h_uv == 0) && is_chroma_block {
-      w_uv = MI_SIZE;
-      h_uv = MI_SIZE;
-    }
-
-    // Add chroma distortion only when it is available
-    if w_uv > 0 && h_uv > 0 {
-      for p in 1..3 {
-        let input_region = ts.input_tile.planes[p].subregion(area);
-        let rec_region = ts.rec.planes[p].subregion(area);
-        distortion += sse_wxh(
-          &input_region,
-          &rec_region,
-          w_uv,
-          h_uv,
-          |bias_area, bsize| {
-            distortion_scale(
-              fi,
-              input_region.subregion(bias_area).frame_block_offset(),
-              bsize,
-            )
-          },
-        ) * fi.dist_scale[p];
-      }
+    for p in 1..3 {
+      let input_region = ts.input_tile.planes[p].subregion(area);
+      let rec_region = ts.rec.planes[p].subregion(area);
+      distortion += sse_wxh(
+        &input_region,
+        &rec_region,
+        chroma_w,
+        chroma_h,
+        |bias_area, bsize| {
+          distortion_scale(
+            fi,
+            input_region.subregion(bias_area).frame_block_offset(),
+            bsize,
+          )
+        },
+      ) * fi.dist_scale[p];
     }
   }
   distortion
