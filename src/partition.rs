@@ -327,9 +327,9 @@ impl BlockSize {
       panic!("invalid block size for this subsampling mode");
     }
 
-    let uv_tx = max_txsize_rect_lookup[plane_bsize as usize];
+    let chroma_tx_size = max_txsize_rect_lookup[plane_bsize as usize];
 
-    av1_get_coded_tx_size(uv_tx)
+    av1_get_coded_tx_size(chroma_tx_size)
   }
 
   pub fn is_sqr(self) -> bool {
