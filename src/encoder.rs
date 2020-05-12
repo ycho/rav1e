@@ -1985,8 +1985,8 @@ pub fn write_tx_blocks<T: Pixel>(
   tx_type: TxType, skip: bool, cfl: CFLParams, luma_only: bool,
   rdo_type: RDOType, need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
-  let bw = bsize.width_mi() / tx_size.width_mi();
-  let bh = bsize.height_mi() / tx_size.height_mi();
+  let tx_blks_w = bsize.width_mi() / tx_size.width_mi();
+  let tx_blks_h = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);
   assert_ne!(qidx, 0); // lossless is not yet supported
 
@@ -2005,8 +2005,8 @@ pub fn write_tx_blocks<T: Pixel>(
     0,
   );
 
-  for by in 0..bh {
-    for bx in 0..bw {
+  for by in 0..tx_blks_h {
+    for bx in 0..tx_blks_w {
       let tx_bo = TileBlockOffset(BlockOffset {
         x: tile_bo.0.x + bx * tx_size.width_mi(),
         y: tile_bo.0.y + by * tx_size.height_mi(),
@@ -2046,88 +2046,68 @@ pub fn write_tx_blocks<T: Pixel>(
   if !do_chroma || luma_only {
     return (partition_has_coeff, tx_dist);
   };
+  debug_assert!(has_chroma(tile_bo, bsize, xdec, ydec));
 
-  let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
+  let tx_bo = TileBlockOffset(BlockOffset {
+    x: tile_bo.0.x - ((bsize.width_mi() == 1) as usize) * xdec,
+    y: tile_bo.0.y - ((bsize.height_mi() == 1) as usize) * ydec,
+  });
+  assert!(tx_bo.0.x < ts.mi_width && tx_bo.0.y < ts.mi_height);
 
-  let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
-  let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
-
-  if (bw_uv == 0 || bh_uv == 0) && do_chroma {
-    bw_uv = 1;
-    bh_uv = 1;
-  }
-
-  bw_uv /= uv_tx_size.width_mi();
-  bh_uv /= uv_tx_size.height_mi();
+  let chroma_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
+  debug_assert!(chroma_tx_size.block_size() <= BlockSize::BLOCK_64X64);
 
   if chroma_mode.is_cfl() {
     luma_ac(&mut ac.data, ts, tile_bo, bsize, tx_size, fi);
   }
 
-  if bw_uv > 0 && bh_uv > 0 {
-    debug_assert!(has_chroma(tile_bo, bsize, xdec, ydec));
-    let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
+  let chrom_tx_type =
+    if chroma_tx_size.width() >= 32 || chroma_tx_size.height() >= 32 {
       TxType::DCT_DCT
     } else {
       uv_intra_mode_to_tx_type_context(chroma_mode)
     };
 
-    for p in 1..3 {
-      ts.qc.update(
-        qidx,
-        uv_tx_size,
-        true,
-        fi.sequence.bit_depth,
-        fi.dc_delta_q[p],
-        fi.ac_delta_q[p],
-      );
-      let alpha = cfl.alpha(p - 1);
-      for by in 0..bh_uv {
-        for bx in 0..bw_uv {
-          let tx_bo = TileBlockOffset(BlockOffset {
-            x: tile_bo.0.x + ((bx * uv_tx_size.width_mi()) << xdec)
-              - ((bw * tx_size.width_mi() == 1) as usize) * xdec,
-            y: tile_bo.0.y + ((by * uv_tx_size.height_mi()) << ydec)
-              - ((bh * tx_size.height_mi() == 1) as usize) * ydec,
-          });
-          if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
-            continue;
-          }
+  for p in 1..3 {
+    ts.qc.update(
+      qidx,
+      chroma_tx_size,
+      true,
+      fi.sequence.bit_depth,
+      fi.dc_delta_q[p],
+      fi.ac_delta_q[p],
+    );
+    let alpha = cfl.alpha(p - 1);
 
-          let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
-          po.x += (bx * uv_tx_size.width()) as isize;
-          po.y += (by * uv_tx_size.height()) as isize;
-          let (has_coeff, dist) = encode_tx_block(
-            fi,
-            ts,
-            cw,
-            w,
-            p,
-            tile_bo,
-            bx,
-            by,
-            tx_bo,
-            chroma_mode,
-            uv_tx_size,
-            uv_tx_type,
-            bsize,
-            po,
-            skip,
-            qidx,
-            &ac.data,
-            if chroma_mode.is_cfl() {
-              IntraParam::Alpha(alpha)
-            } else {
-              IntraParam::AngleDelta(angle_delta.uv)
-            },
-            rdo_type,
-            need_recon_pixel,
-          );
-          partition_has_coeff |= has_coeff;
-          tx_dist += dist;
-        }
-      }
-    }
+    let po = tx_bo.plane_offset(&ts.input.planes[p].cfg);
+    let (has_coeff, dist) = encode_tx_block(
+      fi,
+      ts,
+      cw,
+      w,
+      p,
+      tile_bo,
+      0,
+      0,
+      tx_bo,
+      chroma_mode,
+      chroma_tx_size,
+      chrom_tx_type,
+      bsize,
+      po,
+      skip,
+      qidx,
+      &ac.data,
+      if chroma_mode.is_cfl() {
+        IntraParam::Alpha(alpha)
+      } else {
+        IntraParam::AngleDelta(angle_delta.uv)
+      },
+      rdo_type,
+      need_recon_pixel,
+    );
+    partition_has_coeff |= has_coeff;
+    tx_dist += dist;
   }
 
   (partition_has_coeff, tx_dist)
@@ -2143,8 +2123,8 @@ pub fn write_tx_tree<T: Pixel>(
   if skip {
     return (false, ScaledDistortion::zero());
   }
-  let bw = bsize.width_mi() / tx_size.width_mi();
-  let bh = bsize.height_mi() / tx_size.height_mi();
+  let tx_blks_w = bsize.width_mi() / tx_size.width_mi();
+  let tx_blks_h = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
@@ -2164,8 +2144,8 @@ pub fn write_tx_tree<T: Pixel>(
   // TODO: If tx-parition more than only 1-level, this code does not work.
   // It should recursively traverse the tx block that are split recursivelty by calling write_tx_tree(),
   // as defined in https://aomediacodec.github.io/av1-spec/#transform-tree-syntax
-  for by in 0..bh {
-    for bx in 0..bw {
+  for by in 0..tx_blks_h {
+    for bx in 0..tx_blks_w {
       let tx_bo = TileBlockOffset(BlockOffset {
         x: tile_bo.0.x + bx * tx_size.width_mi(),
         y: tile_bo.0.y + by * tx_size.height_mi(),
@@ -2205,79 +2185,57 @@ pub fn write_tx_tree<T: Pixel>(
   if !has_chroma(tile_bo, bsize, xdec, ydec) || luma_only {
     return (partition_has_coeff, tx_dist);
   };
+  debug_assert!(has_chroma(tile_bo, bsize, xdec, ydec));
+
+  let tx_bo = TileBlockOffset(BlockOffset {
+    x: tile_bo.0.x - ((bsize.width_mi() == 1) as usize) * xdec,
+    y: tile_bo.0.y - ((bsize.height_mi() == 1) as usize) * ydec,
+  });
+  assert!(tx_bo.0.x < ts.mi_width && tx_bo.0.y < ts.mi_height);
 
   let max_tx_size = max_txsize_rect_lookup[bsize as usize];
   debug_assert!(max_tx_size.block_size() <= BlockSize::BLOCK_64X64);
-  let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
 
-  let mut bw_uv = max_tx_size.width_mi() >> xdec;
-  let mut bh_uv = max_tx_size.height_mi() >> ydec;
+  let chroma_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
 
-  if bw_uv == 0 || bh_uv == 0 {
-    bw_uv = 1;
-    bh_uv = 1;
-  }
+  let chrom_tx_type =
+    if partition_has_coeff { tx_type } else { TxType::DCT_DCT }; // if inter mode, chrom_tx_type == tx_type
 
-  bw_uv /= uv_tx_size.width_mi();
-  bh_uv /= uv_tx_size.height_mi();
+  for p in 1..3 {
+    ts.qc.update(
+      qidx,
+      chroma_tx_size,
+      false,
+      fi.sequence.bit_depth,
+      fi.dc_delta_q[p],
+      fi.ac_delta_q[p],
+    );
 
-  if bw_uv > 0 && bh_uv > 0 {
-    debug_assert!(has_chroma(tile_bo, bsize, xdec, ydec));
-    let uv_tx_type =
-      if partition_has_coeff { tx_type } else { TxType::DCT_DCT }; // if inter mode, uv_tx_type == tx_type
-
-    for p in 1..3 {
-      ts.qc.update(
-        qidx,
-        uv_tx_size,
-        false,
-        fi.sequence.bit_depth,
-        fi.dc_delta_q[p],
-        fi.ac_delta_q[p],
-      );
-
-      for by in 0..bh_uv {
-        for bx in 0..bw_uv {
-          let tx_bo = TileBlockOffset(BlockOffset {
-            x: tile_bo.0.x + ((bx * uv_tx_size.width_mi()) << xdec)
-              - (max_tx_size.width_mi() == 1) as usize * xdec,
-            y: tile_bo.0.y + ((by * uv_tx_size.height_mi()) << ydec)
-              - (max_tx_size.height_mi() == 1) as usize * ydec,
-          });
-          if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
-            continue;
-          }
-
-          let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
-          po.x += (bx * uv_tx_size.width()) as isize;
-          po.y += (by * uv_tx_size.height()) as isize;
-          let (has_coeff, dist) = encode_tx_block(
-            fi,
-            ts,
-            cw,
-            w,
-            p,
-            tile_bo,
-            bx,
-            by,
-            tx_bo,
-            luma_mode,
-            uv_tx_size,
-            uv_tx_type,
-            bsize,
-            po,
-            skip,
-            qidx,
-            ac,
-            IntraParam::AngleDelta(angle_delta_y),
-            rdo_type,
-            need_recon_pixel,
-          );
-          partition_has_coeff |= has_coeff;
-          tx_dist += dist;
-        }
-      }
-    }
+    let po = tx_bo.plane_offset(&ts.input.planes[p].cfg);
+    let (has_coeff, dist) = encode_tx_block(
+      fi,
+      ts,
+      cw,
+      w,
+      p,
+      tile_bo,
+      0,
+      0,
+      tx_bo,
+      luma_mode,
+      chroma_tx_size,
+      chrom_tx_type,
+      bsize,
+      po,
+      skip,
+      qidx,
+      ac,
+      IntraParam::AngleDelta(angle_delta_y),
+      rdo_type,
+      need_recon_pixel,
+    );
+    partition_has_coeff |= has_coeff;
+    tx_dist += dist;
   }
 
   (partition_has_coeff, tx_dist)
