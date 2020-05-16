@@ -366,7 +366,10 @@ fn compute_distortion<T: Pixel>(
     ),
   } * fi.dist_scale[0];
 
-  if is_chroma_block && !luma_only && fi.config.chroma_sampling != ChromaSampling::Cs400 {
+  if is_chroma_block
+    && !luma_only
+    && fi.config.chroma_sampling != ChromaSampling::Cs400
+  {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
     let chroma_w = if bsize.width() >= 8 || xdec == 0 {
       (visible_w + xdec) >> xdec
@@ -442,7 +445,11 @@ fn compute_tx_distortion<T: Pixel>(
     tx_dist
   };
 
-  if is_chroma_block && !luma_only && skip && fi.config.chroma_sampling != ChromaSampling::Cs400 {
+  if is_chroma_block
+    && !luma_only
+    && skip
+    && fi.config.chroma_sampling != ChromaSampling::Cs400
+  {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
     let chroma_w = if bsize.width() >= 8 || xdec == 0 {
       (visible_w + xdec) >> xdec

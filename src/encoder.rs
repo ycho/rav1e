@@ -2062,10 +2062,19 @@ pub fn write_tx_blocks<T: Pixel>(
     }
   }
 
-  if !do_chroma || luma_only || fi.config.chroma_sampling == ChromaSampling::Cs400 {
+  if !do_chroma
+    || luma_only
+    || fi.config.chroma_sampling == ChromaSampling::Cs400
+  {
     return (partition_has_coeff, tx_dist);
   };
-  debug_assert!(has_chroma(tile_bo, bsize, xdec, ydec));
+  debug_assert!(has_chroma(
+    tile_bo,
+    bsize,
+    xdec,
+    ydec,
+    fi.sequence.chroma_sampling
+  ));
 
   let tx_bo = TileBlockOffset(BlockOffset {
     x: tile_bo.0.x - ((bsize.width_mi() == 1) as usize) * xdec,
@@ -2201,10 +2210,19 @@ pub fn write_tx_tree<T: Pixel>(
     }
   }
 
-  if !has_chroma(tile_bo, bsize, xdec, ydec) || luma_only || fi.config.chroma_sampling == ChromaSampling::Cs400 {
+  if !has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling)
+    || luma_only
+    || fi.config.chroma_sampling == ChromaSampling::Cs400
+  {
     return (partition_has_coeff, tx_dist);
   };
-  debug_assert!(has_chroma(tile_bo, bsize, xdec, ydec));
+  debug_assert!(has_chroma(
+    tile_bo,
+    bsize,
+    xdec,
+    ydec,
+    fi.sequence.chroma_sampling
+  ));
 
   let tx_bo = TileBlockOffset(BlockOffset {
     x: tile_bo.0.x - ((bsize.width_mi() == 1) as usize) * xdec,
