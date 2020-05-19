@@ -2358,6 +2358,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   let hbs = bsize.width_mi() >> 1;
   let has_cols = tile_bo.0.x + hbs < ts.mi_width;
   let has_rows = tile_bo.0.y + hbs < ts.mi_height;
+  let is_straddle_x = tile_bo.0.x + bsize.width() > ts.mi_width;
+  let is_straddle_y = tile_bo.0.y + bsize.height() > ts.mi_height;
 
   // TODO: Update for 128x128 superblocks
   assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
@@ -2456,7 +2458,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     debug_assert!(is_square);
 
     let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
-    if fi.config.speed_settings.non_square_partition {
+    if fi.config.speed_settings.non_square_partition || is_straddle_x || is_straddle_y {
       if has_cols {
         partition_types.push(PartitionType::PARTITION_HORZ);
       }
