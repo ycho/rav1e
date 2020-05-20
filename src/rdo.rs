@@ -1833,6 +1833,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   let w_post_checkpoint = w_post_cdef.checkpoint();
 
   for &partition in partition_types {
+    assert!(partition != PartitionType::PARTITION_HORZ && partition != PartitionType::PARTITION_VERT);
     // Do not re-encode results we already have
     if partition == cached_block.part_type {
       continue;

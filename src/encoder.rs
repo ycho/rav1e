@@ -2375,7 +2375,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         continue;
       }
 
-      if must_split {
+      /*if must_split {
         let cbw = (ts.mi_width - tile_bo.0.x).min(bsw); // clipped block width, i.e. having effective pixels
         let cbh = (ts.mi_height - tile_bo.0.y).min(bsh);
         let mut split_vert = false;
@@ -2392,7 +2392,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         if !split_vert && partition == PartitionType::PARTITION_VERT {
           continue;
         };
-      } else if !fi.config.speed_settings.non_square_partition
+      } else */if !fi.config.speed_settings.non_square_partition
         && (partition == PartitionType::PARTITION_HORZ
           || partition == PartitionType::PARTITION_VERT)
       {
@@ -2579,7 +2579,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       part_modes: ArrayVec::new(),
     });
   let partition: PartitionType;
-  let mut split_vert = false;
+  /*let mut split_vert = false;
   let mut split_horz = false;
   if must_split {
     let cbw = (ts.mi_width - tile_bo.0.x).min(bsw); // clipped block width, i.e. having effective pixels
@@ -2594,9 +2594,9 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     if cbh == bsh / 2 && cbw == bsw {
       split_horz = true;
     }
-  }
+  }*/
 
-  if must_split && (!split_vert && !split_horz) {
+  if must_split /*&& (!split_vert && !split_horz)*/ {
     // Oversized blocks are split automatically
     partition = PartitionType::PARTITION_SPLIT;
   } else if (must_split || (bsize > fi.partition_range.min && is_square))
@@ -2612,12 +2612,12 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
     if must_split {
       partition_types.push(PartitionType::PARTITION_SPLIT);
-      if split_horz {
+      /*if split_horz {
         partition_types.push(PartitionType::PARTITION_HORZ);
       };
       if split_vert {
         partition_types.push(PartitionType::PARTITION_VERT);
-      };
+      };*/
     } else {
       partition_types.push(PartitionType::PARTITION_NONE);
       partition_types.push(PartitionType::PARTITION_SPLIT);
