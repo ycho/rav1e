@@ -2375,7 +2375,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         continue;
       }
 
-      /*if must_split {
+      if must_split && fi.config.speed_settings.non_square_partition {
         let cbw = (ts.mi_width - tile_bo.0.x).min(bsw); // clipped block width, i.e. having effective pixels
         let cbh = (ts.mi_height - tile_bo.0.y).min(bsh);
         let mut split_vert = false;
@@ -2392,7 +2392,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         if !split_vert && partition == PartitionType::PARTITION_VERT {
           continue;
         };
-      } else */if !fi.config.speed_settings.non_square_partition
+      } else if !fi.config.speed_settings.non_square_partition
         && (partition == PartitionType::PARTITION_HORZ
           || partition == PartitionType::PARTITION_VERT)
       {
