@@ -297,13 +297,13 @@ impl<'a> ContextWriter<'a> {
 
   pub fn write_partition(
     &mut self, w: &mut impl Writer, bo: TileBlockOffset, p: PartitionType,
-    bsize: BlockSize,
+    bsize: BlockSize, cols: usize, rows: usize,
   ) {
     debug_assert!(bsize.is_sqr());
     assert!(bsize >= BlockSize::BLOCK_8X8);
     let hbs = bsize.width_mi() / 2;
-    let has_cols = (bo.0.x + hbs) < self.bc.blocks.cols();
-    let has_rows = (bo.0.y + hbs) < self.bc.blocks.rows();
+    let has_cols = (bo.0.x + hbs) < cols;
+    let has_rows = (bo.0.y + hbs) < rows;
     let ctx = self.bc.partition_plane_context(bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
