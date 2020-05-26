@@ -538,8 +538,8 @@ pub(crate) mod rust {
     ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
     edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, _cpu: CpuFeatureLevel,
   ) {
-    let width = tx_size.width();
-    let height = tx_size.height();
+    let width = tx_size.block_size().width();
+    let height = tx_size.block_size().height();
 
     // left pixels are ordered from bottom to top and right-aligned
     let (left, not_left) = edge_buf.data.split_at(2 * MAX_TX_SIZE);
@@ -626,9 +626,9 @@ pub(crate) mod rust {
       / len;
     let avg = T::cast_from(avg);
 
-    for line in output.rows_iter_mut().take(height) {
-      for v in &mut line[..width] {
-        *v = avg;
+    for y in 0..height {
+      for x in 0..width {
+        output[y][x] = avg;
       }
     }
   }
@@ -654,8 +654,10 @@ pub(crate) mod rust {
       v + acc
     });
     let avg = T::cast_from((sum + (height >> 1) as u32) / height as u32);
-    for line in output.rows_iter_mut().take(height) {
-      line[..width].iter_mut().for_each(|v| *v = avg);
+    for y in 0..height {
+      for x in 0..width {
+        output[y][x] = avg;
+      }
     }
   }
 
@@ -668,8 +670,10 @@ pub(crate) mod rust {
       v + acc
     });
     let avg = T::cast_from((sum + (width >> 1) as u32) / width as u32);
-    for line in output.rows_iter_mut().take(height) {
-      line[..width].iter_mut().for_each(|v| *v = avg);
+    for y in 0..height {
+      for x in 0..width {
+        output[y][x] = avg;
+      }
     }
   }
 
@@ -677,9 +681,9 @@ pub(crate) mod rust {
     output: &mut PlaneRegionMut<'_, T>, left: &[T], width: usize,
     height: usize,
   ) {
-    for (line, l) in output.rows_iter_mut().zip(left[..height].iter().rev()) {
-      for v in &mut line[..width] {
-        *v = *l;
+    for y in 0..height {
+      for x in 0..width {
+        output[y][x] = left[height - 1 - y];
       }
     }
   }
@@ -688,8 +692,8 @@ pub(crate) mod rust {
     output: &mut PlaneRegionMut<'_, T>, above: &[T], width: usize,
     height: usize,
   ) {
-    for line in output.rows_iter_mut().take(height) {
-      line[..width].clone_from_slice(&above[..width])
+    for y in 0..height {
+      output[y][0..width].clone_from_slice(&above[..width]);
     }
   }
 
@@ -863,17 +867,15 @@ pub(crate) mod rust {
     assert!(32 >= width);
     assert!(ac.len() >= 32 * (height - 1) + width);
     assert!(output.plane_cfg.stride >= width);
-    assert!(output.rows_iter().len() >= height);
 
     let sample_max = (1 << bit_depth) - 1;
     let avg: i32 = output[0][0].into();
 
-    for (line, luma) in
-      output.rows_iter_mut().zip(ac.chunks(width)).take(height)
-    {
-      for (v, &l) in line[..width].iter_mut().zip(luma[..width].iter()) {
-        *v = T::cast_from(
-          (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max),
+    for y in 0..height {
+      for x in 0..width {
+        let luma = ac[y * width + x];
+        output[y][x] = T::cast_from(
+          (avg + get_scaled_luma_q0(alpha, luma)).max(0).min(sample_max),
         );
       }
     }

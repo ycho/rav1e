@@ -1817,7 +1817,8 @@ impl<'a> BlockContext<'a> {
 
   pub fn get_txb_ctx(
     &self, plane_bsize: BlockSize, tx_size: TxSize, plane: usize,
-    bo: TileBlockOffset, xdec: usize, ydec: usize,
+    bo: TileBlockOffset, xdec: usize, ydec: usize, visible_w: usize,
+    visible_h: usize,
   ) -> TXB_CTX {
     let mut txb_ctx = TXB_CTX { txb_skip_ctx: 0, dc_sign_ctx: 0 };
     const MAX_TX_SIZE_UNIT: usize = 16;
@@ -1828,13 +1829,11 @@ impl<'a> BlockContext<'a> {
       2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
     ];
     let mut dc_sign: i16 = 0;
-    let txb_w_unit = tx_size.width_mi();
-    let txb_h_unit = tx_size.height_mi();
 
     let above_ctxs =
-      &self.above_coeff_context[plane][(bo.0.x >> xdec)..][..txb_w_unit];
-    let left_ctxs =
-      &self.left_coeff_context[plane][(bo.y_in_sb() >> ydec)..][..txb_h_unit];
+      &self.above_coeff_context[plane][(bo.0.x >> xdec)..][..visible_w >> 2];
+    let left_ctxs = &self.left_coeff_context[plane][(bo.y_in_sb() >> ydec)..]
+      [..visible_h >> 2];
 
     // Decide txb_ctx.dc_sign_ctx
     for &ctx in above_ctxs {
@@ -2101,13 +2100,13 @@ impl<'a> ContextWriter<'a> {
 
   pub fn write_partition(
     &mut self, w: &mut impl Writer, bo: TileBlockOffset, p: PartitionType,
-    bsize: BlockSize,
+    bsize: BlockSize, cols: usize, rows: usize,
   ) {
     debug_assert!(bsize.is_sqr());
     assert!(bsize >= BlockSize::BLOCK_8X8);
     let hbs = bsize.width_mi() / 2;
-    let has_cols = (bo.0.x + hbs) < self.bc.blocks.cols();
-    let has_rows = (bo.0.y + hbs) < self.bc.blocks.rows();
+    let has_cols = (bo.0.x + hbs) < cols;
+    let has_rows = (bo.0.y + hbs) < rows;
     let ctx = self.bc.partition_plane_context(bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
@@ -2305,6 +2304,10 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, bsize: BlockSize,
     tx_size: TxSize, txfm_split: bool, tbx: usize, tby: usize, depth: usize,
   ) {
+    if bo.0.x >= self.bc.blocks.cols() || bo.0.y >= self.bc.blocks.rows() {
+      return;
+    }
+
     debug_assert!(self.bc.blocks[bo].is_inter());
     debug_assert!(bsize > BlockSize::BLOCK_4X4);
     debug_assert!(!tx_size.is_rect() || bsize.is_rect_tx_allowed());
@@ -3093,16 +3096,14 @@ impl<'a> ContextWriter<'a> {
       let border_h = 128 + blk_h as isize * 8;
       let mvx_min =
         -(frame_bo.0.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let mvx_max = (self.bc.blocks.frame_cols()
-        - frame_bo.0.x
-        - blk_w / MI_SIZE) as isize
+      let mvx_max = ((self.bc.blocks.frame_cols() - frame_bo.0.x) as isize
+        - (blk_w / MI_SIZE) as isize)
         * (8 * MI_SIZE) as isize
         + border_w;
       let mvy_min =
         -(frame_bo.0.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let mvy_max = (self.bc.blocks.frame_rows()
-        - frame_bo.0.y
-        - blk_h / MI_SIZE) as isize
+      let mvy_max = ((self.bc.blocks.frame_rows() - frame_bo.0.y) as isize
+        - (blk_h / MI_SIZE) as isize)
         * (8 * MI_SIZE) as isize
         + border_h;
       mv.this_mv.row =
@@ -4143,7 +4144,7 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, plane: usize, bo: TileBlockOffset,
     coeffs_in: &[T], eob: usize, pred_mode: PredictionMode, tx_size: TxSize,
     tx_type: TxType, plane_bsize: BlockSize, xdec: usize, ydec: usize,
-    use_reduced_tx_set: bool,
+    use_reduced_tx_set: bool, visible_w: usize, visible_h: usize,
   ) -> bool {
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
     //assert!(!is_inter);
@@ -4161,8 +4162,16 @@ impl<'a> ContextWriter<'a> {
     let mut cul_level = coeffs.iter().map(|c| u32::cast_from(c.abs())).sum();
 
     let txs_ctx = Self::get_txsize_entropy_ctx(tx_size);
-    let txb_ctx =
-      self.bc.get_txb_ctx(plane_bsize, tx_size, plane, bo, xdec, ydec);
+    let txb_ctx = self.bc.get_txb_ctx(
+      plane_bsize,
+      tx_size,
+      plane,
+      bo,
+      xdec,
+      ydec,
+      visible_w,
+      visible_h,
+    );
 
     {
       let cdf = &mut self.fc.txb_skip_cdf[txs_ctx][txb_ctx.txb_skip_ctx];
