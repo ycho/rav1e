@@ -68,11 +68,11 @@ const fn get_mv_range(
   let border_w = 128 + blk_w as isize * 8;
   let border_h = 128 + blk_h as isize * 8;
   let mvx_min = -(bo.0.x as isize) * (8 * MI_SIZE) as isize - border_w;
-  let mvx_max = (w_in_b - bo.0.x - blk_w / MI_SIZE) as isize
+  let mvx_max = ((w_in_b - bo.0.x) as isize - (blk_w / MI_SIZE) as isize)
     * (8 * MI_SIZE) as isize
     + border_w;
   let mvy_min = -(bo.0.y as isize) * (8 * MI_SIZE) as isize - border_h;
-  let mvy_max = (h_in_b - bo.0.y - blk_h / MI_SIZE) as isize
+  let mvy_max = ((h_in_b - bo.0.y) as isize - (blk_h / MI_SIZE) as isize)
     * (8 * MI_SIZE) as isize
     + border_h;
 
@@ -197,9 +197,9 @@ pub trait MotionEstimation {
   ) -> MotionVector {
     match fi.rec_buffer.frames[fi.ref_frames[ref_frame.to_index()] as usize] {
       Some(ref rec) => {
+        let frame_bo = ts.to_frame_block_offset(tile_bo);
         let blk_w = bsize.width();
         let blk_h = bsize.height();
-        let frame_bo = ts.to_frame_block_offset(tile_bo);
         let (mvx_min, mvx_max, mvy_min, mvy_max) =
           get_mv_range(fi.w_in_b, fi.h_in_b, frame_bo, blk_w, blk_h);
 
