@@ -1233,7 +1233,7 @@ pub fn encode_tx_block<T: Pixel>(
     (frame_bo.0.y << MI_SIZE_LOG2) >> ydec,
   );
 
-  if true {
+  if false {
     diff(
       residual,
       &ts.input_tile.planes[p].subregion(area),
