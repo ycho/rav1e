@@ -3586,9 +3586,16 @@ fn encode_tile<'a, T: Pixel>(
       cw.bc.code_deltas = fi.delta_q_present;
 
       let pmv_idx = sbx + sby * ts.sb_width;
+      let is_straddle_sbx =
+        tile_bo.0.x + BlockSize::BLOCK_64X64.width_mi() > ts.mi_width;
+      let is_straddle_sby =
+        tile_bo.0.y + BlockSize::BLOCK_64X64.height_mi() > ts.mi_height;
 
       // Encode SuperBlock
-      if fi.config.speed_settings.encode_bottomup {
+      if fi.config.speed_settings.encode_bottomup
+        || is_straddle_sbx
+        || is_straddle_sby
+      {
         encode_partition_bottomup(
           fi,
           ts,
