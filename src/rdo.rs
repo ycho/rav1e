@@ -377,7 +377,7 @@ fn compute_distortion<T: Pixel>(
       (4 + visible_w + xdec) >> xdec
     };
     let chroma_h = if bsize.height() >= 8 || ydec == 0 {
-      (visible_h + ydec) >> xdec
+      (visible_h + ydec) >> ydec
     } else {
       (4 + visible_h + ydec) >> ydec
     };
@@ -457,7 +457,7 @@ fn compute_tx_distortion<T: Pixel>(
       (4 + visible_w + xdec) >> xdec
     };
     let chroma_h = if bsize.height() >= 8 || ydec == 0 {
-      (visible_h + ydec) >> xdec
+      (visible_h + ydec) >> ydec
     } else {
       (4 + visible_h + ydec) >> ydec
     };
