@@ -1817,8 +1817,8 @@ impl<'a> BlockContext<'a> {
 
   pub fn get_txb_ctx(
     &self, plane_bsize: BlockSize, tx_size: TxSize, plane: usize,
-    bo: TileBlockOffset, xdec: usize, ydec: usize, visible_w: usize,
-    visible_h: usize,
+    bo: TileBlockOffset, xdec: usize, ydec: usize, frame_clipped_txw: usize,
+    frame_clipped_txh: usize,
   ) -> TXB_CTX {
     let mut txb_ctx = TXB_CTX { txb_skip_ctx: 0, dc_sign_ctx: 0 };
     const MAX_TX_SIZE_UNIT: usize = 16;
@@ -1830,10 +1830,10 @@ impl<'a> BlockContext<'a> {
     ];
     let mut dc_sign: i16 = 0;
 
-    let above_ctxs =
-      &self.above_coeff_context[plane][(bo.0.x >> xdec)..][..visible_w >> 2];
+    let above_ctxs = &self.above_coeff_context[plane][(bo.0.x >> xdec)..]
+      [..frame_clipped_txw >> 2];
     let left_ctxs = &self.left_coeff_context[plane][(bo.y_in_sb() >> ydec)..]
-      [..visible_h >> 2];
+      [..frame_clipped_txh >> 2];
 
     // Decide txb_ctx.dc_sign_ctx
     for &ctx in above_ctxs {
@@ -4144,8 +4144,12 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, plane: usize, bo: TileBlockOffset,
     coeffs_in: &[T], eob: usize, pred_mode: PredictionMode, tx_size: TxSize,
     tx_type: TxType, plane_bsize: BlockSize, xdec: usize, ydec: usize,
-    use_reduced_tx_set: bool, visible_w: usize, visible_h: usize,
+    use_reduced_tx_set: bool, frame_clipped_txw: usize,
+    frame_clipped_txh: usize,
   ) -> bool {
+    debug_assert!(frame_clipped_txw != 0);
+    debug_assert!(frame_clipped_txh != 0);
+
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
     //assert!(!is_inter);
     // Note: Both intra and inter mode uses inter scan order. Surprised?
@@ -4169,8 +4173,8 @@ impl<'a> ContextWriter<'a> {
       bo,
       xdec,
       ydec,
-      visible_w,
-      visible_h,
+      frame_clipped_txw,
+      frame_clipped_txh,
     );
 
     {

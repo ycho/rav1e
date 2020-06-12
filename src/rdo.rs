@@ -301,11 +301,21 @@ pub fn clip_visible_bsize(
   let blk_w = bsize.width();
   let blk_h = bsize.height();
 
-  let visible_w: usize = if x + blk_w > frame_w { frame_w - x } else { blk_w };
-  let visible_h: usize = if y + blk_h > frame_h { frame_h - y } else { blk_h };
+  let visible_w: usize = if x + blk_w <= frame_w {
+    blk_w
+  } else if x >= frame_w {
+    0
+  } else {
+    frame_w - x
+  };
 
-  debug_assert!(visible_w > 0);
-  debug_assert!(visible_h > 0);
+  let visible_h: usize = if y + blk_h <= frame_h {
+    blk_h
+  } else if y >= frame_h {
+    0
+  } else {
+    frame_h - y
+  };
 
   (visible_w, visible_h)
 }
@@ -328,6 +338,10 @@ fn compute_distortion<T: Pixel>(
     frame_bo.0.x << MI_SIZE_LOG2,
     frame_bo.0.y << MI_SIZE_LOG2,
   );
+
+  if visible_w == 0 || visible_h == 0 {
+    return ScaledDistortion::zero();
+  }
 
   let mut distortion = match fi.config.tune {
     Tune::Psychovisual
@@ -426,6 +440,10 @@ fn compute_tx_distortion<T: Pixel>(
       frame_bo.0.y << MI_SIZE_LOG2,
     )
   };
+
+  if visible_w == 0 || visible_h == 0 {
+    return ScaledDistortion::zero();
+  }
 
   let mut distortion = if skip {
     sse_wxh(
@@ -1503,6 +1521,9 @@ pub fn rdo_cfl_alpha<T: Pixel>(
     (frame_bo.0.y << MI_SIZE_LOG2) >> ydec,
   );
 
+  if visible_tx_w == 0 || visible_tx_h == 0 {
+    return None;
+  };
   let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
   luma_ac(&mut ac.data, ts, tile_bo, bsize, luma_tx_size, fi);
   let best_alpha: ArrayVec<[i16; 2]> = (1..3)

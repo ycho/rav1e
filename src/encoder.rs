@@ -1146,6 +1146,7 @@ pub fn encode_tx_block<T: Pixel>(
   if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
     return (false, ScaledDistortion::zero());
   }
+
   debug_assert!(tx_bo.0.x < ts.mi_width);
   debug_assert!(tx_bo.0.y < ts.mi_height);
 
@@ -1269,6 +1270,15 @@ pub fn encode_tx_block<T: Pixel>(
   let eob = ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);
 
   let has_coeff = if need_recon_pixel || rdo_type.needs_coeff_rate() {
+    debug_assert!((((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2) >> xdec) >= 4);
+    debug_assert!((((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2) >> ydec) >= 4);
+    let frame_clipped_txw: usize =
+      (((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2) >> xdec)
+        .min(tx_size.width());
+    let frame_clipped_txh: usize =
+      (((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2) >> ydec)
+        .min(tx_size.height());
+
     cw.write_coeffs_lv_map(
       w,
       p,
@@ -1282,8 +1292,8 @@ pub fn encode_tx_block<T: Pixel>(
       xdec,
       ydec,
       fi.use_reduced_tx_set,
-      visible_tx_w.align_power_of_two(2),
-      visible_tx_h.align_power_of_two(2),
+      frame_clipped_txw,
+      frame_clipped_txh,
     )
   } else {
     true
@@ -1314,46 +1324,48 @@ pub fn encode_tx_block<T: Pixel>(
     );
   }
 
-  let tx_dist = if rdo_type.needs_tx_dist() {
-    // Store tx-domain distortion of this block
-    // rcoeffs above 32 rows/cols aren't held in the array, because they are
-    // always 0. The first 32x32 is stored first in coeffs so we can iterate
-    // over coeffs and rcoeffs for the first 32 rows/cols. For the
-    // coefficients above 32 rows/cols, we iterate over the rest of coeffs
-    // with the assumption that rcoeff coefficients are zero.
-    let mut raw_tx_dist = coeffs
-      .iter()
-      .zip(rcoeffs.iter())
-      .map(|(&a, &b)| {
-        let c = i32::cast_from(a) - i32::cast_from(b);
-        (c * c) as u64
-      })
-      .sum::<u64>()
-      + coeffs[rcoeffs.len()..]
+  let tx_dist =
+    if rdo_type.needs_tx_dist() && visible_tx_w != 0 && visible_tx_h != 0 {
+      // Store tx-domain distortion of this block
+      // rcoeffs above 32 rows/cols aren't held in the array, because they are
+      // always 0. The first 32x32 is stored first in coeffs so we can iterate
+      // over coeffs and rcoeffs for the first 32 rows/cols. For the
+      // coefficients above 32 rows/cols, we iterate over the rest of coeffs
+      // with the assumption that rcoeff coefficients are zero.
+      let mut raw_tx_dist = coeffs
         .iter()
-        .map(|&a| {
-          let c = i32::cast_from(a);
+        .zip(rcoeffs.iter())
+        .map(|(&a, &b)| {
+          let c = i32::cast_from(a) - i32::cast_from(b);
           (c * c) as u64
         })
-        .sum::<u64>();
+        .sum::<u64>()
+        + coeffs[rcoeffs.len()..]
+          .iter()
+          .map(|&a| {
+            let c = i32::cast_from(a);
+            (c * c) as u64
+          })
+          .sum::<u64>();
 
-    let tx_dist_scale_bits = 2 * (3 - get_log_tx_scale(tx_size));
-    let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
+      let tx_dist_scale_bits = 2 * (3 - get_log_tx_scale(tx_size));
+      let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
 
-    raw_tx_dist =
-      (raw_tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
+      raw_tx_dist =
+        (raw_tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
 
-    if rdo_type == RDOType::TxDistEstRate {
-      // look up rate and distortion in table
-      let estimated_rate = estimate_rate(fi.base_q_idx, tx_size, raw_tx_dist);
-      w.add_bits_frac(estimated_rate as u32);
-    }
+      if rdo_type == RDOType::TxDistEstRate {
+        // look up rate and distortion in table
+        let estimated_rate =
+          estimate_rate(fi.base_q_idx, tx_size, raw_tx_dist);
+        w.add_bits_frac(estimated_rate as u32);
+      }
 
-    let bias = distortion_scale(fi, ts.to_frame_block_offset(tx_bo), bsize);
-    RawDistortion::new(raw_tx_dist) * bias * fi.dist_scale[p]
-  } else {
-    ScaledDistortion::zero()
-  };
+      let bias = distortion_scale(fi, ts.to_frame_block_offset(tx_bo), bsize);
+      RawDistortion::new(raw_tx_dist) * bias * fi.dist_scale[p]
+    } else {
+      ScaledDistortion::zero()
+    };
 
   (has_coeff, tx_dist)
 }
@@ -1929,29 +1941,29 @@ pub fn luma_ac<T: Pixel>(
   };
   let rec = &ts.rec.planes[0];
   let luma = &rec.subregion(Area::BlockStartingAt { bo: bo.0 });
-
   let frame_bo = ts.to_frame_block_offset(bo);
-  let (visible_luma_w, visible_luma_h) = clip_visible_bsize(
-    fi.width,
-    fi.height,
-    bsize,
-    frame_bo.0.x << MI_SIZE_LOG2,
-    frame_bo.0.y << MI_SIZE_LOG2,
-  );
+
+  let frame_clipped_bw: usize =
+    ((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2).min(bsize.width());
+  let frame_clipped_bh: usize =
+    ((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2).min(bsize.height());
 
   // Similar to 'MaxLumaW' and 'MaxLumaH' stated in https://aomediacodec.github.io/av1-spec/#transform-block-semantics
   let max_luma_w: usize;
   let max_luma_h: usize;
 
-  if bsize >= BlockSize::BLOCK_8X8 && tx_size.block_size() < bsize {
+  if bsize.width() > BlockSize::BLOCK_16X16.width() {
     let txw_log2 = tx_size.width_log2();
-    let txh_log2 = tx_size.height_log2();
     max_luma_w =
-      ((visible_luma_w + (1 << txw_log2) - 1) >> txw_log2) << txw_log2;
-    max_luma_h =
-      ((visible_luma_h + (1 << txh_log2) - 1) >> txh_log2) << txh_log2;
+      ((frame_clipped_bw + (1 << txw_log2) - 1) >> txw_log2) << txw_log2;
   } else {
     max_luma_w = bsize.width();
+  }
+  if bsize.height() > BlockSize::BLOCK_16X16.height() {
+    let txh_log2 = tx_size.height_log2();
+    max_luma_h =
+      ((frame_clipped_bh + (1 << txh_log2) - 1) >> txh_log2) << txh_log2;
+  } else {
     max_luma_h = bsize.height();
   }
 
@@ -2025,7 +2037,9 @@ pub fn write_tx_blocks<T: Pixel>(
         x: tile_bo.0.x + bx * tx_size.width_mi(),
         y: tile_bo.0.y + by * tx_size.height_mi(),
       });
-
+      if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
+        continue;
+      }
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
       let (has_coeff, dist) = encode_tx_block(
         fi,
@@ -2185,6 +2199,9 @@ pub fn write_tx_tree<T: Pixel>(
         x: tile_bo.0.x + bx * tx_size.width_mi(),
         y: tile_bo.0.y + by * tx_size.height_mi(),
       });
+      if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
+        continue;
+      }
 
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
       let (has_coeff, dist) = encode_tx_block(
