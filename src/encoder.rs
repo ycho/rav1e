@@ -1952,14 +1952,14 @@ pub fn luma_ac<T: Pixel>(
   let max_luma_w: usize;
   let max_luma_h: usize;
 
-  if bsize.width() > BlockSize::BLOCK_16X16.width() {
+  if bsize.width() > BlockSize::BLOCK_8X8.width() {
     let txw_log2 = tx_size.width_log2();
     max_luma_w =
       ((frame_clipped_bw + (1 << txw_log2) - 1) >> txw_log2) << txw_log2;
   } else {
     max_luma_w = bsize.width();
   }
-  if bsize.height() > BlockSize::BLOCK_16X16.height() {
+  if bsize.height() > BlockSize::BLOCK_8X8.height() {
     let txh_log2 = tx_size.height_log2();
     max_luma_h =
       ((frame_clipped_bh + (1 << txh_log2) - 1) >> txh_log2) << txh_log2;
