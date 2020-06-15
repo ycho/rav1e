@@ -2497,10 +2497,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       if has_cols {
         partition_types.push(PartitionType::PARTITION_HORZ);
       }
-      if !(fi.sequence.chroma_sampling == ChromaSampling::Cs422) {
-        if has_rows {
-          partition_types.push(PartitionType::PARTITION_VERT);
-        }
+      if !(fi.sequence.chroma_sampling == ChromaSampling::Cs422) && has_rows {
+        partition_types.push(PartitionType::PARTITION_VERT);
       }
     }
     partition_types.push(PartitionType::PARTITION_SPLIT);
