@@ -138,29 +138,25 @@ pub(crate) mod rust {
     let tx2d = if size == 4 { hadamard4x4 } else { hadamard8x8 };
 
     let mut sum = 0 as u64;
+    let stride1 = plane_org.plane_cfg.stride;
+    let stride2 = plane_ref.plane_cfg.stride;
 
     // Loop over chunks the size of the chosen transform
     for chunk_y in (0..blk_h).step_by(size) {
       for chunk_x in (0..blk_w).step_by(size) {
-        let chunk_area: Area = Area::Rect {
-          x: chunk_x as isize,
-          y: chunk_y as isize,
-          width: size,
-          height: size,
-        };
-        let chunk_org = plane_org.subregion(chunk_area);
-        let chunk_ref = plane_ref.subregion(chunk_area);
         let buf: &mut [i32] = &mut [0; 8 * 8][..size * size];
 
-        // Move the difference of the transforms to a buffer
-        for (row_diff, (row_org, row_ref)) in buf
-          .chunks_mut(size)
-          .zip(chunk_org.rows_iter().zip(chunk_ref.rows_iter()))
-        {
-          for (diff, (a, b)) in
-            row_diff.iter_mut().zip(row_org.iter().zip(row_ref.iter()))
-          {
-            *diff = i32::cast_from(*a) - i32::cast_from(*b);
+        for y in 0..size {
+          for x in 0..size {
+            unsafe {
+              let v1 = plane_org
+                .data_ptr()
+                .add((y + chunk_y) * stride1 + x + chunk_x);
+              let v2 = plane_ref
+                .data_ptr()
+                .add((y + chunk_y) * stride2 + x + chunk_x);
+              buf[y * size + x] = i32::cast_from(*v1) - i32::cast_from(*v2);
+            }
           }
         }
 
