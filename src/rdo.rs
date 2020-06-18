@@ -947,7 +947,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     );
   }
 
-  if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
+  if false && best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
@@ -1334,11 +1334,13 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   cw_checkpoint: &ContextWriterCheckpoint, rdo_type: RDOType,
   mut best: PartitionParameters, is_chroma_block: bool,
 ) -> PartitionParameters {
-  let num_modes_rdo: usize;
+  //let num_modes_rdo: usize;
+  let num_modes_rdo: usize = 1;
   let mut modes = ArrayVec::<[_; INTRA_MODES]>::new();
+  modes.push(PredictionMode::DC_PRED);
 
   // Reduce number of prediction modes at higher speed levels
-  num_modes_rdo = if (fi.frame_type == FrameType::KEY
+ /* num_modes_rdo = if (fi.frame_type == FrameType::KEY
     && fi.config.speed_settings.prediction_modes
       >= PredictionModesSetting::ComplexKeyframes)
     || (fi.frame_type.has_inter()
@@ -1445,7 +1447,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
     modes[num_modes_rdo / 2..].sort_by_key(|&a| satds[a as usize]);
   }
-
+*/
   debug_assert!(num_modes_rdo >= 1);
 
   modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
@@ -1476,7 +1478,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     );
   });
 
-  if fi.config.speed_settings.fine_directional_intra
+  if false && fi.config.speed_settings.fine_directional_intra
     && bsize >= BlockSize::BLOCK_8X8
   {
     // Find the best angle delta for the current best prediction mode
