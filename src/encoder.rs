@@ -3087,8 +3087,6 @@ fn encode_tile_group<T: Pixel>(
   }
   fs.deblock.levels = levels;
 
-  fs.deblock.levels[0] = 0;
-  fs.deblock.levels[1] = 0;
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
     let ts = &mut fs.as_tile_state_mut();
     let rec = &mut ts.rec;
