@@ -1756,6 +1756,45 @@ pub fn get_sub_partitions(
   partition_offsets
 }
 
+pub fn get_sub_partitions_with_border_check(
+  four_partitions: &[TileBlockOffset; 4], partition: PartitionType,
+  mi_width: usize, mi_height: usize, subsize: BlockSize,
+) -> ArrayVec<[TileBlockOffset; 4]> {
+  let mut partition_offsets = ArrayVec::<[TileBlockOffset; 4]>::new();
+
+  partition_offsets.push(four_partitions[0]);
+
+  if partition == PARTITION_NONE {
+    return partition_offsets;
+  }
+
+  let hbsw = subsize.width_mi(); // Half the block size width in blocks
+  let hbsh = subsize.height_mi(); // Half the block size height in blocks
+
+  if (partition == PARTITION_VERT || partition == PARTITION_SPLIT)
+    && four_partitions[1].0.x + hbsw <= mi_width
+    && four_partitions[1].0.y + hbsh <= mi_height
+  {
+    partition_offsets.push(four_partitions[1]);
+  };
+
+  if (partition == PARTITION_HORZ || partition == PARTITION_SPLIT)
+    && four_partitions[2].0.x + hbsw <= mi_width
+    && four_partitions[2].0.y + hbsh <= mi_height
+  {
+    partition_offsets.push(four_partitions[2]);
+  };
+
+  if partition == PARTITION_SPLIT
+    && four_partitions[3].0.x + hbsw <= mi_width
+    && four_partitions[3].0.y + hbsh <= mi_height
+  {
+    partition_offsets.push(four_partitions[3]);
+  };
+
+  partition_offsets
+}
+
 #[inline(always)]
 fn rdo_partition_none<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
@@ -1821,7 +1860,13 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
     }),
   ];
 
-  let partitions = get_sub_partitions(&four_partitions, partition);
+  let partitions = get_sub_partitions_with_border_check(
+    &four_partitions,
+    partition,
+    ts.mi_width,
+    ts.mi_height,
+    subsize,
+  );
 
   let mut rd_cost_sum = 0.0;
 
