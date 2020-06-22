@@ -1814,7 +1814,7 @@ fn rdo_partition_none<T: Pixel>(
 
 // VERTICAL, HORIZONTAL or simple SPLIT
 #[inline(always)]
-fn rdo_partition_simple<T: Pixel, W: Writer>(
+/*fn rdo_partition_simple<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset, inter_cfg: &InterConfig,
@@ -1913,6 +1913,106 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       //rd_cost_sum += std::f64::MAX;
       return None;
     }
+  }
+
+  Some(cost + rd_cost_sum)
+}
+*/
+
+fn rdo_partition_simple<T: Pixel, W: Writer>(
+  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
+  bsize: BlockSize, tile_bo: TileBlockOffset, inter_cfg: &InterConfig,
+  partition: PartitionType, rdo_type: RDOType, best_rd: f64,
+  child_modes: &mut ArrayVec<[PartitionParameters; 4]>,
+) -> Option<f64> {
+  let subsize = bsize.subsize(partition);
+
+  debug_assert!(subsize != BlockSize::BLOCK_INVALID);
+
+  let cost = if bsize >= BlockSize::BLOCK_8X8 {
+    let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
+    let tell = w.tell_frac();
+    //cw.write_partition(w, tile_bo, partition, bsize);
+    cw.write_partition(
+      w,
+      tile_bo,
+      partition,
+      bsize,
+      ts.mi_width,
+      ts.mi_height,
+    );
+    compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero())
+  } else {
+    0.0
+  };
+
+  //pmv = best_pred_modes[0].mvs[0];
+
+  // assert!(best_pred_modes.len() <= 4);
+
+  let hbsw = subsize.width_mi(); // Half the block size width in blocks
+  let hbsh = subsize.height_mi(); // Half the block size height in blocks
+  let four_partitions = [
+    tile_bo,
+    TileBlockOffset(BlockOffset {
+      x: tile_bo.0.x + hbsw as usize,
+      y: tile_bo.0.y,
+    }),
+    TileBlockOffset(BlockOffset {
+      x: tile_bo.0.x,
+      y: tile_bo.0.y + hbsh as usize,
+    }),
+    TileBlockOffset(BlockOffset {
+      x: tile_bo.0.x + hbsw as usize,
+      y: tile_bo.0.y + hbsh as usize,
+    }),
+  ];
+  let partitions = get_sub_partitions_with_border_check(
+    &four_partitions,
+    partition,
+    ts.mi_width,
+    ts.mi_height,
+    subsize,
+  );
+
+  let mut rd_cost_sum = 0.0;
+
+  for offset in partitions {
+    let mode_decision =
+      rdo_mode_decision(fi, ts, cw, subsize, offset, inter_cfg);
+
+    rd_cost_sum += mode_decision.rd_cost;
+
+    if fi.enable_early_exit && rd_cost_sum > best_rd {
+      return None;
+    }
+
+    if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
+      let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
+      //cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
+      cw.write_partition(
+        w,
+        offset,
+        PartitionType::PARTITION_NONE,
+        subsize,
+        ts.mi_width,
+        ts.mi_height,
+      );
+    }
+    encode_block_with_modes(
+      fi,
+      ts,
+      cw,
+      w_pre_cdef,
+      w_post_cdef,
+      subsize,
+      offset,
+      &mode_decision,
+      rdo_type,
+      false,
+    );
+    child_modes.push(mode_decision);
   }
 
   Some(cost + rd_cost_sum)
