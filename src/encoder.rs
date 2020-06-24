@@ -1084,7 +1084,6 @@ fn diff2<T: Pixel>(
         let v1 = src1.data_ptr().add(y * stride1 + x);
         let v2 = src2.data_ptr().add(y * stride2 + x);
         let diff = i16::cast_from(*v1) - i16::cast_from(*v2);
-        debug_assert!(-255 <= diff && diff <= 255);
         dst[y * width + x] = diff;
       }
     }
