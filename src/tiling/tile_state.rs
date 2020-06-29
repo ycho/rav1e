@@ -125,24 +125,24 @@ impl IndexMut<usize> for MiTileState {
 impl<'a, T: Pixel> TileStateMut<'a, T> {
   pub fn new(
     fs: &'a mut FrameState<T>, sbo: PlaneSuperBlockOffset,
-    sb_size_log2: usize, width: usize, height: usize,
+    sb_size_log2: usize, w: usize, h: usize,
   ) -> Self {
     debug_assert!(
-      width % MI_SIZE == 0,
+      w % MI_SIZE == 0,
       "Tile width must be a multiple of MI_SIZE"
     );
     debug_assert!(
-      height % MI_SIZE == 0,
+      h % MI_SIZE == 0,
       "Tile width must be a multiple of MI_SIZE"
     );
     let luma_rect = TileRect {
       x: sbo.0.x << sb_size_log2,
       y: sbo.0.y << sb_size_log2,
-      width,
-      height,
+      width: w.align_power_of_two(sb_size_log2),
+      height: h.align_power_of_two(sb_size_log2),
     };
-    let sb_width = width.align_power_of_two_and_shift(sb_size_log2);
-    let sb_height = height.align_power_of_two_and_shift(sb_size_log2);
+    let sb_width = w.align_power_of_two_and_shift(sb_size_log2);
+    let sb_height = h.align_power_of_two_and_shift(sb_size_log2);
     if !fs.half_res_pmvs.iter().any(|&(key, _)| key == sbo) {
       // Initialize a blank array in the slot for this tile in the FrameState.
       // This will immediately be overridden with the half_res_pmvs
@@ -155,10 +155,10 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
       sb_size_log2,
       sb_width,
       sb_height,
-      mi_width: width >> MI_SIZE_LOG2,
-      mi_height: height >> MI_SIZE_LOG2,
-      width,
-      height,
+      mi_width: w >> MI_SIZE_LOG2,
+      mi_height: h >> MI_SIZE_LOG2,
+      width: w,
+      height: h,
       input: &fs.input,
       input_tile: Tile::new(&fs.input, luma_rect),
       input_hres: &fs.input_hres,
@@ -186,15 +186,12 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
             fmvs,
             sbo.0.x << (sb_size_log2 - MI_SIZE_LOG2),
             sbo.0.y << (sb_size_log2 - MI_SIZE_LOG2),
-            width >> MI_SIZE_LOG2,
-            height >> MI_SIZE_LOG2,
+            w >> MI_SIZE_LOG2,
+            h >> MI_SIZE_LOG2,
           )
         })
         .collect(),
-      coded_block_info: MiTileState::new(
-        width >> MI_SIZE_LOG2,
-        height >> MI_SIZE_LOG2,
-      ),
+      coded_block_info: MiTileState::new(w >> MI_SIZE_LOG2, h >> MI_SIZE_LOG2),
       integral_buffer: IntegralImageBuffer::zeroed(SOLVE_IMAGE_SIZE),
       enc_stats: EncoderStats::default(),
     }

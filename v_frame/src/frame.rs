@@ -27,8 +27,8 @@ impl<T: Pixel> Frame<T> {
     width: usize, height: usize, chroma_sampling: ChromaSampling,
     luma_padding: usize,
   ) -> Self {
-    let luma_width = width.align_power_of_two(3);
-    let luma_height = height.align_power_of_two(3);
+    let luma_width = width.align_power_of_two(6);
+    let luma_height = height.align_power_of_two(6);
 
     let (chroma_decimation_x, chroma_decimation_y) =
       chroma_sampling.get_decimation().unwrap_or((0, 0));
