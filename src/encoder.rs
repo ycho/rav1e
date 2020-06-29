@@ -412,10 +412,17 @@ impl<T: Pixel> FrameState<T> {
   }
 
   #[inline(always)]
-  pub fn as_tile_state_mut(&mut self) -> TileStateMut<'_, T> {
-    let PlaneConfig { width, height, .. } = self.rec.planes[0].cfg;
+  pub fn as_tile_state_mut(
+    &mut self, fi: &FrameInvariants<T>,
+  ) -> TileStateMut<'_, T> {
     let sbo_0 = PlaneSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 });
-    TileStateMut::new(self, sbo_0, self.sb_size_log2, width, height)
+    TileStateMut::new(
+      self,
+      sbo_0,
+      self.sb_size_log2,
+      fi.w_in_b << MI_SIZE_LOG2,
+      fi.h_in_b << MI_SIZE_LOG2,
+    )
   }
 }
 
@@ -3086,7 +3093,7 @@ fn encode_tile_group<T: Pixel>(
   /* TODO: Don't apply if lossless */
   let levels;
   {
-    let ts = &mut fs.as_tile_state_mut();
+    let ts = &mut fs.as_tile_state_mut(fi);
     let rec = &mut ts.rec;
     levels = deblock_filter_optimize(
       fi,
@@ -3100,7 +3107,7 @@ fn encode_tile_group<T: Pixel>(
   fs.deblock.levels = levels;
 
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
-    let ts = &mut fs.as_tile_state_mut();
+    let ts = &mut fs.as_tile_state_mut(fi);
     let rec = &mut ts.rec;
     deblock_filter_frame(
       ts.deblock,
