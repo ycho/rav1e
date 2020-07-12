@@ -814,8 +814,6 @@ fn luma_chroma_mode_rdo<T: Pixel>(
             tile_bo,
             PartitionType::PARTITION_NONE,
             bsize,
-            ts.mi_width,
-            ts.mi_height,
           );
         }
 
@@ -1797,14 +1795,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   let cost = if bsize >= BlockSize::BLOCK_8X8 {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     let tell = w.tell_frac();
-    cw.write_partition(
-      w,
-      tile_bo,
-      partition,
-      bsize,
-      ts.mi_width,
-      ts.mi_height,
-    );
+    cw.write_partition(w, tile_bo, partition, bsize);
     compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero())
   } else {
     0.0
@@ -1849,14 +1840,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
         let w: &mut W =
           if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
-        cw.write_partition(
-          w,
-          offset,
-          PartitionType::PARTITION_NONE,
-          subsize,
-          ts.mi_width,
-          ts.mi_height,
-        );
+        cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
       }
       encode_block_with_modes(
         fi,
