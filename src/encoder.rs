@@ -1971,7 +1971,6 @@ pub fn luma_ac<T: Pixel>(
   let max_luma_x: usize = max_luma_w.max(8) - (1 << xdec);
   let max_luma_y: usize = max_luma_h.max(8) - (1 << ydec);
 
-  let stride = rec.plane_cfg.stride;
   let mut sum: i32 = 0;
   for sub_y in 0..plane_bsize.height() {
     for sub_x in 0..plane_bsize.width() {
@@ -1980,17 +1979,14 @@ pub fn luma_ac<T: Pixel>(
       let luma_x = sub_x << xdec;
       let y = luma_y.min(max_luma_y);
       let x = luma_x.min(max_luma_x);
-      let mut sample: i16;
-      unsafe {
-        sample = i16::cast_from(*luma.data_ptr().add(y * stride + x));
-        if xdec != 0 {
-          sample += i16::cast_from(*luma.data_ptr().add(y * stride + x + 1));
-        }
-        if ydec != 0 {
-          debug_assert!(xdec != 0);
-          sample += i16::cast_from(*luma.data_ptr().add((y + 1) * stride + x))
-            + i16::cast_from(*luma.data_ptr().add((y + 1) * stride + x + 1));
-        }
+      let mut sample: i16 = i16::cast_from(luma[y][x]);
+      if xdec != 0 {
+        sample += i16::cast_from(luma[y][x + 1]);
+      }
+      if ydec != 0 {
+        debug_assert!(xdec != 0);
+        sample +=
+          i16::cast_from(luma[y + 1][x]) + i16::cast_from(luma[y + 1][x + 1]);
       }
       sample <<= 3 - xdec - ydec;
       ac[sub_y * plane_bsize.width() + sub_x] = sample;
