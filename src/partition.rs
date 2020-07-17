@@ -670,8 +670,8 @@ pub fn get_intra_edges<T: Pixel>(
         partition_bo.0.x > 0
       };
 
-    let right_available = x + tx_size.width() < dst.rect().width;
-    let bottom_available = y + tx_size.height() < dst.rect().height;
+    let right_available = x + tx_size.width() < dst.plane_cfg.width;
+    let bottom_available = y + tx_size.height() < dst.plane_cfg.height;
 
     let scaled_partition_size =
       supersample_chroma_bsize(partition_size, plane_cfg.xdec, plane_cfg.ydec);
@@ -692,7 +692,7 @@ pub fn get_intra_edges<T: Pixel>(
           plane_cfg.xdec,
           plane_cfg.ydec,
         ) {
-        tx_size.width().min(dst.rect().width - x - tx_size.width())
+        tx_size.width().min(dst.plane_cfg.width - x - tx_size.width())
       } else {
         0
       };
@@ -728,7 +728,7 @@ pub fn get_intra_edges<T: Pixel>(
           plane_cfg.xdec,
           plane_cfg.ydec,
         ) {
-        tx_size.height().min(dst.rect().height - y - tx_size.height())
+        tx_size.height().min(dst.plane_cfg.height - y - tx_size.height())
       } else {
         0
       };
