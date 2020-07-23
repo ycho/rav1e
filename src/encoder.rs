@@ -1071,25 +1071,6 @@ fn diff<T: Pixel>(
   }
 }
 
-fn diff2<T: Pixel>(
-  dst: &mut [i16], src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>,
-  width: usize, _height: usize, visible_w: usize, visible_h: usize,
-) {
-  let stride1 = src1.plane_cfg.stride;
-  let stride2 = src2.plane_cfg.stride;
-
-  for y in 0..visible_h {
-    for x in 0..visible_w {
-      unsafe {
-        let v1 = src1.data_ptr().add(y * stride1 + x);
-        let v2 = src2.data_ptr().add(y * stride2 + x);
-        let diff = i16::cast_from(*v1) - i16::cast_from(*v2);
-        dst[y * width + x] = diff;
-      }
-    }
-  }
-}
-
 fn get_qidx<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, cw: &ContextWriter,
   tile_bo: TileBlockOffset,
@@ -1232,22 +1213,11 @@ pub fn encode_tx_block<T: Pixel>(
     (frame_bo.0.y << MI_SIZE_LOG2) >> ydec,
   );
 
-  // TODO (yushin): Further speed test is required to choose which diff function to use, diff() or diff2()
-  if false {
+  if visible_tx_w != 0 && visible_tx_h != 0 {
     diff(
       residual,
       &ts.input_tile.planes[p].subregion(area),
       &rec.subregion(area),
-      tx_size.width(),
-      tx_size.height(),
-    );
-  } else {
-    diff2(
-      residual,
-      &ts.input_tile.planes[p].subregion(area),
-      &rec.subregion(area),
-      tx_size.width(),
-      tx_size.height(),
       visible_tx_w,
       visible_tx_h,
     );
